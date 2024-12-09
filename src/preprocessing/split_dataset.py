@@ -12,9 +12,10 @@ def split_data(input_dir, output_dirs, train_ratio=0.7, val_ratio=0.15, test_rat
         val_ratio (float): Validation seti oranı.
         test_ratio (float): Test seti oranı.
     """
-    os.makedirs(output_dirs["train"], exist_ok=True)
-    os.makedirs(output_dirs["val"], exist_ok=True)
-    os.makedirs(output_dirs["test"], exist_ok=True)
+    for split in ["train", "val", "test"]:
+        os.makedirs(os.path.join(output_dirs[split], "images"), exist_ok=True)
+        os.makedirs(os.path.join(output_dirs[split], "segmentation1"), exist_ok=True)
+        os.makedirs(os.path.join(output_dirs[split], "segmentation2"), exist_ok=True)
 
     image_files = sorted(os.listdir(os.path.join(input_dir, "images")))
 
