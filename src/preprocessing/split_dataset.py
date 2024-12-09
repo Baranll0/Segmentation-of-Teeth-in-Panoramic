@@ -38,10 +38,10 @@ def split_data(input_dir, output_dirs, train_ratio=0.7, val_ratio=0.15, test_rat
 
 
 if __name__ == "__main__":
-    input_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/augmented"
+    input_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays"
     output_dirs = {
-        "train": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/train",
-        "val": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/val",
-        "test": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/test",
+        "train": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/processed/train",
+        "val": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/processed/val",
+        "test": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/processed/test",
     }
     split_data(input_dir, output_dirs)

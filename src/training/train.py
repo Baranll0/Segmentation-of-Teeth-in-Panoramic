@@ -1,34 +1,29 @@
 import os
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from torch.optim import Adam
-from torchvision import transforms
 from tqdm import tqdm
-from src.preprocessing.dataset import get_data_loader
-from src.preprocessing.preprocess import preprocess_image
+from sklearn.metrics import precision_score, recall_score, f1_score
 from src.models.unet import UNet
 from src.models.utils import dice_loss
-from src.evaluation.metrics import evaluate_model
-from src.evaluation.visualize import plot_loss_curve, visualize_metrics, visualize_predictions
-from src.inference.predict import predict_segmentation
-from src.inference.postprocess import postprocess_segmentation
-import matplotlib.pyplot as plt
+from src.preprocessing.dataset import get_data_loader
 
+# Cihaz seçimi
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train_model(train_loader, val_loader, model, criterion, optimizer, num_epochs=50, patience=5, save_dir="/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs"):
+def train_model(train_loader, val_loader, model, criterion, optimizer, num_epochs=2, patience=5, save_dir="./outputs"):
     """
     Modeli eğitir ve çıktıları kaydeder.
     """
     models_dir = os.path.join(save_dir, "models")
-    visualizations_dir = os.path.join(save_dir, "visualizations")
     os.makedirs(models_dir, exist_ok=True)
-    os.makedirs(visualizations_dir, exist_ok=True)
 
     best_loss = float("inf")
+    patience_counter = 0
     train_losses = []
     val_losses = []
-    patience_counter = 0
 
     for epoch in range(num_epochs):
         model.train()
@@ -36,32 +31,29 @@ def train_model(train_loader, val_loader, model, criterion, optimizer, num_epoch
         correct_train = 0
         total_train = 0
 
-        # Eğitim aşaması
+        # Eğitim döngüsü
         train_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} [Training]")
-        for images, (segmentation1, _) in train_bar:
-            images, segmentation1 = images.to(device), segmentation1.to(device)
+        for images, masks in train_bar:
+            images, masks = images.to(device), masks.to(device)
             optimizer.zero_grad()
             outputs = model(images)
 
-            # Loss hesaplama
-            loss = criterion(outputs, segmentation1)
+            loss = criterion(outputs, masks)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
-            # Accuracy hesaplama
-            preds = (outputs > 0.5).long()
-            correct_train += (preds == segmentation1).sum().item()
-            total_train += segmentation1.numel()
+            preds = (outputs > 0.5).float()
+            correct_train += (preds == masks).sum().item()
+            total_train += masks.numel()
 
-            # TQDM güncellemesi
             train_bar.set_postfix(loss=loss.item())
 
         epoch_loss = running_loss / len(train_loader)
         train_losses.append(epoch_loss)
         train_accuracy = correct_train / total_train
 
-        # Doğrulama aşaması
+        # Doğrulama döngüsü
         model.eval()
         val_loss = 0.0
         correct_val = 0
@@ -69,20 +61,17 @@ def train_model(train_loader, val_loader, model, criterion, optimizer, num_epoch
 
         val_bar = tqdm(val_loader, desc=f"Epoch {epoch + 1}/{num_epochs} [Validation]")
         with torch.no_grad():
-            for images, (segmentation1, _) in val_bar:
-                images, segmentation1 = images.to(device), segmentation1.to(device)
+            for images, masks in val_bar:
+                images, masks = images.to(device), masks.to(device)
                 outputs = model(images)
 
-                # Loss hesaplama
-                loss = criterion(outputs, segmentation1)
+                loss = criterion(outputs, masks)
                 val_loss += loss.item()
 
-                # Accuracy hesaplama
-                preds = (outputs > 0.5).long()
-                correct_val += (preds == segmentation1).sum().item()
-                total_val += segmentation1.numel()
+                preds = (outputs > 0.5).float()
+                correct_val += (preds == masks).sum().item()
+                total_val += masks.numel()
 
-                # TQDM güncellemesi
                 val_bar.set_postfix(loss=loss.item())
 
         val_loss /= len(val_loader)
@@ -94,160 +83,113 @@ def train_model(train_loader, val_loader, model, criterion, optimizer, num_epoch
         # En iyi modeli kaydet
         if val_loss < best_loss:
             best_loss = val_loss
-            patience_counter = 0  # Patience sıfırla
+            patience_counter = 0
             torch.save(model.state_dict(), os.path.join(models_dir, "best_model.pth"))
             print(f"Best model saved at epoch {epoch + 1}")
         else:
             patience_counter += 1
             print(f"Validation loss did not improve. Patience counter: {patience_counter}")
 
-        # Son modeli kaydet
-        torch.save(model.state_dict(), os.path.join(models_dir, "last_model.pth"))
-
         # Erken durdurma kontrolü
         if patience_counter >= patience:
             print(f"Early stopping at epoch {epoch + 1}")
             break
 
-    # Eğitim ve doğrulama kayıp eğrilerini çiz ve kaydet
-    plot_loss_curve(
-        train_losses,
-        val_losses,
-        os.path.join(visualizations_dir, "loss_curve.png")
-    )
+        # Son modeli kaydet
+        torch.save(model.state_dict(), os.path.join(models_dir, "last_model.pth"))
 
 
-def evaluate_and_visualize(model, test_loader, save_dir):
+def evaluate_model(model, test_loader, device):
     """
-    Modeli değerlendirir ve sonuçları görselleştirir.
+    Modeli test seti üzerinde değerlendirir ve metrikleri döner.
     """
-    visualizations_dir = os.path.join(save_dir, "visualizations")
-    os.makedirs(visualizations_dir, exist_ok=True)
+    model.eval()
+    all_preds = []
+    all_targets = []
 
-    # Değerlendirme metriklerini hesapla
-    print("Evaluating model...")
-    metrics = evaluate_model(model, test_loader, device=device)
-    print("Evaluation Metrics:", metrics)
+    with torch.no_grad():
+        for images, masks in test_loader:
+            images, masks = images.to(device), masks.to(device)
+            outputs = model(images)
+            preds = (outputs > 0.5).float()
 
-    # Değerlendirme metriklerini görselleştir
-    visualize_metrics(
-        metrics,
-        filename=os.path.join(visualizations_dir, "metrics.png")
-    )
+            all_preds.append(preds.cpu().numpy().flatten())
+            all_targets.append(masks.cpu().numpy().flatten())
 
-    # Test tahminlerini görselleştir
-    for idx, (images, (segmentation1, _)) in enumerate(test_loader):
-        images, segmentation1 = images.to(device), segmentation1.to(device)
-        predictions = model(images)
-        predictions = (predictions > 0.5).long()
+    all_preds = np.concatenate(all_preds)
+    all_targets = np.concatenate(all_targets)
 
-        visualize_predictions(
-            images,
-            segmentation1,
-            predictions,
-            idx=0,
-            save_path=os.path.join(visualizations_dir, f"predictions_{idx}.png")
-        )
-        if idx == 5:  # Sadece 5 örnek kaydet
-            break
+    precision = precision_score(all_targets, all_preds, average='binary', zero_division=0)
+    recall = recall_score(all_targets, all_preds, average='binary', zero_division=0)
+    f1 = f1_score(all_targets, all_preds, average='binary', zero_division=0)
+
+    return {"precision": precision, "recall": recall, "f1": f1}
 
 
 def inference(model, test_dir, save_dir):
     """
-    Test setinden 5 görüntü üzerinde tahmin yapar ve sonuçları kaydeder.
+    Test seti üzerindeki tahminleri görselleştir ve kaydet.
     """
-    output_dir = os.path.join(save_dir, "inference")
-    os.makedirs(output_dir, exist_ok=True)
+    model.eval()
+    os.makedirs(save_dir, exist_ok=True)
 
     test_images = sorted(os.listdir(test_dir))
-    selected_images = test_images[:5]  # İlk 5 görüntüyü seç
-
-    for idx, image_name in enumerate(selected_images):
+    for idx, image_name in enumerate(test_images[:5]):  # İlk 5 görüntüyü işle
         image_path = os.path.join(test_dir, image_name)
+        image = plt.imread(image_path)
+        image_tensor = torch.tensor(image).unsqueeze(0).unsqueeze(0).float().to(device) / 255.0
 
-        # Predict
-        prediction = predict_segmentation(model, image_path, device=device)
+        with torch.no_grad():
+            prediction = model(image_tensor)
+            prediction = (prediction > 0.5).float().squeeze().cpu().numpy()
 
-        # Postprocess
-        processed_prediction = postprocess_segmentation(prediction)
-
-        # Save the processed prediction
-        output_path = os.path.join(output_dir, f"processed_{image_name}")
-        plt.imsave(output_path, processed_prediction[0], cmap='gray')
-        print(f"Processed prediction saved to {output_path}")
-
-        # Visualize input and prediction
-        image_tensor = preprocess_image(image_path).to(device)
-        image = image_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
-
-        visualize_predictions(
-            torch.tensor(image).unsqueeze(0),
-            None,
-            torch.tensor(processed_prediction).unsqueeze(0),
-            idx=0,
-            save_path=os.path.join(output_dir, f"visualized_prediction_{idx}.png")
-        )
-        print(f"Visualized prediction saved to {output_path}")
+        processed_path = os.path.join(save_dir, f"processed_{image_name}")
+        plt.imsave(processed_path, prediction, cmap="gray")
+        print(f"Processed prediction saved at {processed_path}")
 
 
 def main():
-    # Dataset directories
+    # Dataset paths
     dataset_dirs = {
         "train": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/train",
         "val": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/val",
         "test": "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/test",
     }
 
-    # Transformations
-    image_transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    mask_transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor(),
-    ])
-
     # Data loaders
     train_loader = get_data_loader(
-        os.path.join(dataset_dirs["train"], "images"),
-        os.path.join(dataset_dirs["train"], "segmentation1"),
-        os.path.join(dataset_dirs["train"], "segmentation2"),
+        images_dir=os.path.join(dataset_dirs["train"], "images"),
+        segmentation1_dir=os.path.join(dataset_dirs["train"], "segmentation1"),
+        segmentation2_dir=os.path.join(dataset_dirs["train"], "segmentation2"),
         batch_size=16,
-        image_transform=image_transform,
-        mask_transform=mask_transform,
     )
     val_loader = get_data_loader(
-        os.path.join(dataset_dirs["val"], "images"),
-        os.path.join(dataset_dirs["val"], "segmentation1"),
-        os.path.join(dataset_dirs["val"], "segmentation2"),
+        images_dir=os.path.join(dataset_dirs["val"], "images"),
+        segmentation1_dir=os.path.join(dataset_dirs["val"], "segmentation1"),
+        segmentation2_dir=os.path.join(dataset_dirs["val"], "segmentation2"),
         batch_size=16,
-        image_transform=image_transform,
-        mask_transform=mask_transform,
     )
     test_loader = get_data_loader(
-        os.path.join(dataset_dirs["test"], "images"),
-        os.path.join(dataset_dirs["test"], "segmentation1"),
-        os.path.join(dataset_dirs["test"], "segmentation2"),
+        images_dir=os.path.join(dataset_dirs["test"], "images"),
+        segmentation1_dir=os.path.join(dataset_dirs["test"], "segmentation1"),
+        segmentation2_dir=os.path.join(dataset_dirs["test"], "segmentation2"),
         batch_size=16,
-        image_transform=image_transform,
-        mask_transform=mask_transform,
     )
 
     # Model, loss, optimizer
-    model = UNet(in_channels=3, out_channels=1).to(device)
+    model = UNet(input_channels=1, last_activation="sigmoid").to(device)
     criterion = dice_loss
     optimizer = Adam(model.parameters(), lr=0.001)
 
-    # Train the model
-    train_model(train_loader, val_loader, model, criterion, optimizer, num_epochs=50, patience=5, save_dir="/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs")
+    # Training
+    train_model(train_loader, val_loader, model, criterion, optimizer, num_epochs=50, patience=5, save_dir="./outputs")
 
-    # Evaluate the model
-    evaluate_and_visualize(model, test_loader, save_dir="/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs")
+    # Evaluation
+    metrics = evaluate_model(model, test_loader, device)
+    print("Test Metrics:", metrics)
 
     # Inference
-    inference(model, os.path.join(dataset_dirs["test"], "images"), save_dir="/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs")
+    inference(model, os.path.join(dataset_dirs["test"], "images"), save_dir="./outputs/inference")
 
 
 if __name__ == "__main__":
