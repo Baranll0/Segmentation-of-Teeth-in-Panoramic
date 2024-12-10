@@ -1,75 +1,48 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, BatchNormalization, concatenate, Conv2DTranspose, \
+    Dropout
+from tensorflow.keras.models import Model
 
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, dropout=0.0):
-        super(ConvBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-        self.relu = nn.ReLU(inplace=True)
-        self.dropout = nn.Dropout2d(p=dropout) if dropout > 0 else nn.Identity()
-        self.batchnorm = nn.BatchNorm2d(out_channels)
 
-    def forward(self, x):
-        x = self.relu(self.conv1(x))
-        x = self.dropout(x)
-        x = self.relu(self.conv2(x))
-        x = self.batchnorm(x)
-        return x
+def UNET(input_shape=(512, 512, 1), last_activation='sigmoid'):
+    inputs = Input(shape=input_shape)
+    conv1 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
+    d1 = Dropout(0.1)(conv1)
+    conv2 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d1)
+    b1 = BatchNormalization()(conv2)
+    pool1 = MaxPooling2D(pool_size=(2, 2))(b1)
 
-class UNet(nn.Module):
-    def __init__(self, input_channels=1, last_activation='sigmoid'):
-        super(UNet, self).__init__()
+    conv3 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
+    d2 = Dropout(0.2)(conv3)
+    conv4 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d2)
+    b2 = BatchNormalization()(conv4)
+    pool2 = MaxPooling2D(pool_size=(2, 2))(b2)
 
-        # Encoder
-        self.enc1 = ConvBlock(input_channels, 32, dropout=0.1)
-        self.pool1 = nn.MaxPool2d(2)
+    conv5 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
+    d3 = Dropout(0.3)(conv5)
+    conv6 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d3)
+    b3 = BatchNormalization()(conv6)
+    pool3 = MaxPooling2D(pool_size=(2, 2))(b3)
 
-        self.enc2 = ConvBlock(32, 64, dropout=0.2)
-        self.pool2 = nn.MaxPool2d(2)
+    conv7 = Conv2D(256, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
+    d4 = Dropout(0.4)(conv7)
+    conv8 = Conv2D(256, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d4)
+    b4 = BatchNormalization()(conv8)
 
-        self.enc3 = ConvBlock(64, 128, dropout=0.3)
-        self.pool3 = nn.MaxPool2d(2)
+    up1 = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(b4)
+    merge1 = concatenate([up1, b3])
+    conv9 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge1)
+    conv10 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
 
-        self.enc4 = ConvBlock(128, 256, dropout=0.4)
-        self.pool4 = nn.MaxPool2d(2)
+    up2 = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(conv10)
+    merge2 = concatenate([up2, b2])
+    conv11 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge2)
+    conv12 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv11)
 
-        self.bottleneck = ConvBlock(256, 512, dropout=0.5)
+    up3 = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(conv12)
+    merge3 = concatenate([up3, b1])
+    conv13 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge3)
+    conv14 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv13)
 
-        # Decoder
-        self.upconv4 = nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1)
-        self.dec4 = ConvBlock(512, 256, dropout=0.4)
-
-        self.upconv3 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1)
-        self.dec3 = ConvBlock(256, 128, dropout=0.3)
-
-        self.upconv2 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)
-        self.dec2 = ConvBlock(128, 64, dropout=0.2)
-
-        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
-        self.dec1 = ConvBlock(64, 32, dropout=0.1)
-
-        # Final Convolution
-        self.final_conv = nn.Conv2d(32, 1, kernel_size=1)
-        self.last_activation = nn.Sigmoid() if last_activation == 'sigmoid' else nn.Identity()
-
-    def forward(self, x):
-        # Encoder
-        enc1 = self.enc1(x)
-        enc2 = self.enc2(self.pool1(enc1))
-        enc3 = self.enc3(self.pool2(enc2))
-        enc4 = self.enc4(self.pool3(enc3))
-
-        # Bottleneck
-        bottleneck = self.bottleneck(self.pool4(enc4))
-
-        # Decoder
-        dec4 = self.dec4(torch.cat([self.upconv4(bottleneck), enc4], dim=1))
-        dec3 = self.dec3(torch.cat([self.upconv3(dec4), enc3], dim=1))
-        dec2 = self.dec2(torch.cat([self.upconv2(dec3), enc2], dim=1))
-        dec1 = self.dec1(torch.cat([self.upconv1(dec2), enc1], dim=1))
-
-        # Final Output
-        output = self.final_conv(dec1)
-        return self.last_activation(output)
+    outputs = Conv2D(1, (1, 1), activation=last_activation)(conv14)
+    model = Model(inputs=inputs, outputs=outputs)
+    return model

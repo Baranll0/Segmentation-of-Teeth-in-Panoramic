@@ -1,25 +1,16 @@
-import torch
-from torchvision import transforms
-from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
 
-def preprocess_image(image_path, resize_shape=(256, 256)):
-    """
-    Bir görüntüyü model için ön işler.
-    """
-    transform = transforms.Compose([
-        transforms.Resize(resize_shape),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-    image = Image.open(image_path).convert('RGB')
-    return transform(image)
-
-def predict_segmentation(model, image_path, device='cuda'):
-    """
-    Tek bir görüntü için model tahmini yapar.
-    """
-    model.eval()
-    image_tensor = preprocess_image(image_path).unsqueeze(0).to(device)
-    with torch.no_grad():
-        prediction = model(image_tensor)
-    return prediction.cpu().numpy()
+def predict_and_visualize(model, X_test, y_test, idx):
+    pred_mask = model.predict(np.expand_dims(X_test[idx], axis=0))[0]
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 3, 1)
+    plt.title('Input Image')
+    plt.imshow(X_test[idx].squeeze(), cmap='gray')
+    plt.subplot(1, 3, 2)
+    plt.title('True Mask')
+    plt.imshow(y_test[idx].squeeze(), cmap='gray')
+    plt.subplot(1, 3, 3)
+    plt.title('Predicted Mask')
+    plt.imshow(pred_mask.squeeze(), cmap='gray')
+    plt.show()

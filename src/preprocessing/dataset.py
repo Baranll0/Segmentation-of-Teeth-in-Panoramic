@@ -1,43 +1,35 @@
-from torch.utils.data import Dataset
-from torchvision import transforms
-from PIL import Image
 import os
-
-class SegmentationDataset(Dataset):
-    def __init__(self, images_dir, segmentation1_dir, segmentation2_dir, transform=None):
-        self.images_dir = images_dir
-        self.segmentation1_dir = segmentation1_dir
-        self.segmentation2_dir = segmentation2_dir
-        self.image_paths = sorted(os.listdir(images_dir))
-        self.segmentation1_paths = sorted(os.listdir(segmentation1_dir))
-        self.segmentation2_paths = sorted(os.listdir(segmentation2_dir))
-        self.transform = transform or transforms.Compose([
-            transforms.ToTensor(),
-        ])
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        # Load images
-        image_path = os.path.join(self.images_dir, self.image_paths[idx])
-        segmentation1_path = os.path.join(self.segmentation1_dir, self.segmentation1_paths[idx])
-        segmentation2_path = os.path.join(self.segmentation2_dir, self.segmentation2_paths[idx])
-
-        image = Image.open(image_path).convert("RGB")
-        segmentation1 = Image.open(segmentation1_path).convert("L")
-        segmentation2 = Image.open(segmentation2_path).convert("L")
-
-        if self.transform:
-            image = self.transform(image)
-            segmentation1 = self.transform(segmentation1)
-            segmentation2 = self.transform(segmentation2)
-
-        return image, (segmentation1, segmentation2)
+import numpy as np
+import cv2
 
 
-from torch.utils.data import DataLoader
+def load_images_and_masks(image_dir, mask_dir, img_size=(512, 512)):
+    """
+    Load images and masks from the specified directories.
 
-def get_data_loader(images_dir, segmentation1_dir, segmentation2_dir, batch_size=16):
-    dataset = SegmentationDataset(images_dir, segmentation1_dir, segmentation2_dir)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+    Args:
+        image_dir (str): Path to the directory containing the images.
+        mask_dir (str): Path to the directory containing the masks.
+        img_size (tuple): Desired size of the images and masks (height, width).
+
+    Returns:
+        tuple: Numpy arrays of images and masks.
+    """
+    images, masks = [], []
+    for img_name in sorted(os.listdir(image_dir)):
+        img_path = os.path.join(image_dir, img_name)
+        mask_path = os.path.join(mask_dir, img_name)
+
+        # Load image and mask in grayscale
+        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+
+        # Resize and normalize
+        img = cv2.resize(img, img_size) / 255.0
+        mask = cv2.resize(mask, img_size) / 255.0
+
+        # Expand dimensions to match (H, W, 1)
+        images.append(np.expand_dims(img, axis=-1))
+        masks.append(np.expand_dims(mask, axis=-1))
+
+    return np.array(images), np.array(masks)

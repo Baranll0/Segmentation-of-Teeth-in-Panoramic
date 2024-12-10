@@ -1,26 +1,15 @@
-import torch
-from sklearn.metrics import precision_score, recall_score, f1_score
+import tensorflow as tf
 
-def evaluate_model(model, dataloader, device='cuda'):
-    model.eval()
-    all_preds = []
-    all_targets = []
+def dice_loss(y_true, y_pred):
+    smooth = 1e-6
+    y_true_f = tf.keras.backend.flatten(y_true)
+    y_pred_f = tf.keras.backend.flatten(y_pred)
+    intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
+    return 1 - (2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth)
 
-    with torch.no_grad():
-        for images, targets in dataloader:
-            images, targets = images.to(device), targets[0].to(device)  # İlk maskeyi kullan
-            outputs = model(images)
-
-            # Tahminleri ikili değerlere dönüştür (0 veya 1)
-            preds = (outputs > 0.5).long().flatten()  # 0.5 eşik değeriyle ikiliye çevir
-            targets = targets.flatten().long()  # Hedef değerleri de long tipe çevir
-
-            all_preds.extend(preds.cpu().numpy())
-            all_targets.extend(targets.cpu().numpy())
-
-    # Precision, Recall ve F1-Skorunu hesapla
-    precision = precision_score(all_targets, all_preds, average='binary', zero_division=0)
-    recall = recall_score(all_targets, all_preds, average='binary', zero_division=0)
-    f1 = f1_score(all_targets, all_preds, average='binary', zero_division=0)
-
-    return {'precision': precision, 'recall': recall, 'f1': f1}
+def dice_coefficient(y_true, y_pred):
+    smooth = 1e-6
+    y_true_f = tf.keras.backend.flatten(y_true)
+    y_pred_f = tf.keras.backend.flatten(y_pred)
+    intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth)
