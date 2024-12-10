@@ -5,7 +5,7 @@ from src.evaluation.metrics import dice_loss, dice_coefficient
 import os
 
 
-def train_model(model, train_loader, val_loader, device, num_epochs=50, learning_rate=1e-4, patience=10):
+def train_model(model, train_loader, val_loader, device, num_epochs=100, learning_rate=1e-4, patience=10):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = dice_loss
 
