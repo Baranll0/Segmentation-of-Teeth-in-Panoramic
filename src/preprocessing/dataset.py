@@ -1,11 +1,11 @@
 import os
 import numpy as np
 import cv2
-
+import torch
 
 def load_images_and_masks(image_dir, mask_dir, img_size=(512, 512)):
     """
-    Load images and masks from the specified directories.
+    Load images and masks from the specified directories and convert them to PyTorch tensor format.
 
     Args:
         image_dir (str): Path to the directory containing the images.
@@ -13,7 +13,7 @@ def load_images_and_masks(image_dir, mask_dir, img_size=(512, 512)):
         img_size (tuple): Desired size of the images and masks (height, width).
 
     Returns:
-        tuple: Numpy arrays of images and masks.
+        tuple: PyTorch tensors of images and masks.
     """
     images, masks = [], []
     for img_name in sorted(os.listdir(image_dir)):
@@ -28,8 +28,8 @@ def load_images_and_masks(image_dir, mask_dir, img_size=(512, 512)):
         img = cv2.resize(img, img_size) / 255.0
         mask = cv2.resize(mask, img_size) / 255.0
 
-        # Expand dimensions to match (H, W, 1)
-        images.append(np.expand_dims(img, axis=-1))
-        masks.append(np.expand_dims(mask, axis=-1))
+        # Convert to PyTorch tensor and change format to (C, H, W)
+        images.append(torch.tensor(img, dtype=torch.float32).unsqueeze(0))  # Add channel dimension
+        masks.append(torch.tensor(mask, dtype=torch.float32).unsqueeze(0))  # Add channel dimension
 
-    return np.array(images), np.array(masks)
+    return torch.stack(images), torch.stack(masks)

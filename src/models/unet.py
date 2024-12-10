@@ -1,48 +1,52 @@
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, BatchNormalization, concatenate, Conv2DTranspose, \
-    Dropout
-from tensorflow.keras.models import Model
+import torch
+import torch.nn as nn
 
+class UNet(nn.Module):
+    def __init__(self, in_channels=1, out_channels=1):
+        super(UNet, self).__init__()
+        self.encoder1 = self.conv_block(in_channels, 32)
+        self.encoder2 = self.conv_block(32, 64)
+        self.encoder3 = self.conv_block(64, 128)
+        self.encoder4 = self.conv_block(128, 256)
 
-def UNET(input_shape=(512, 512, 1), last_activation='sigmoid'):
-    inputs = Input(shape=input_shape)
-    conv1 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
-    d1 = Dropout(0.1)(conv1)
-    conv2 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d1)
-    b1 = BatchNormalization()(conv2)
-    pool1 = MaxPooling2D(pool_size=(2, 2))(b1)
+        self.pool = nn.MaxPool2d(2)
 
-    conv3 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
-    d2 = Dropout(0.2)(conv3)
-    conv4 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d2)
-    b2 = BatchNormalization()(conv4)
-    pool2 = MaxPooling2D(pool_size=(2, 2))(b2)
+        self.upconv3 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.upconv2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
 
-    conv5 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
-    d3 = Dropout(0.3)(conv5)
-    conv6 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d3)
-    b3 = BatchNormalization()(conv6)
-    pool3 = MaxPooling2D(pool_size=(2, 2))(b3)
+        self.decoder3 = self.conv_block(256, 128)
+        self.decoder2 = self.conv_block(128, 64)
+        self.decoder1 = self.conv_block(64, 32)
 
-    conv7 = Conv2D(256, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
-    d4 = Dropout(0.4)(conv7)
-    conv8 = Conv2D(256, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(d4)
-    b4 = BatchNormalization()(conv8)
+        self.final_conv = nn.Conv2d(32, out_channels, kernel_size=1)
 
-    up1 = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(b4)
-    merge1 = concatenate([up1, b3])
-    conv9 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge1)
-    conv10 = Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    def conv_block(self, in_channels, out_channels):
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(out_channels),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(out_channels)
+        )
 
-    up2 = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(conv10)
-    merge2 = concatenate([up2, b2])
-    conv11 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge2)
-    conv12 = Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv11)
+    def forward(self, x):
+        enc1 = self.encoder1(x)
+        enc2 = self.encoder2(self.pool(enc1))
+        enc3 = self.encoder3(self.pool(enc2))
+        enc4 = self.encoder4(self.pool(enc3))
 
-    up3 = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(conv12)
-    merge3 = concatenate([up3, b1])
-    conv13 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(merge3)
-    conv14 = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_normal')(conv13)
+        dec3 = self.upconv3(enc4)
+        dec3 = torch.cat((dec3, enc3), dim=1)
+        dec3 = self.decoder3(dec3)
 
-    outputs = Conv2D(1, (1, 1), activation=last_activation)(conv14)
-    model = Model(inputs=inputs, outputs=outputs)
-    return model
+        dec2 = self.upconv2(dec3)
+        dec2 = torch.cat((dec2, enc2), dim=1)
+        dec2 = self.decoder2(dec2)
+
+        dec1 = self.upconv1(dec2)
+        dec1 = torch.cat((dec1, enc1), dim=1)
+        dec1 = self.decoder1(dec1)
+
+        return torch.sigmoid(self.final_conv(dec1))

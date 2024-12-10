@@ -1,6 +1,6 @@
 import albumentations as A
 import numpy as np
-
+import torch
 
 def create_augmentation_pipeline():
     """
@@ -17,29 +17,34 @@ def create_augmentation_pipeline():
         A.ElasticTransform(p=0.2)
     ])
 
-
 def augment_images(images, masks, augmentation_pipeline):
     """
     Apply augmentation to images and masks.
 
     Args:
-        images (numpy.ndarray): Array of input images.
-        masks (numpy.ndarray): Array of corresponding masks.
+        images (torch.Tensor): Tensor of input images with shape (N, C, H, W).
+        masks (torch.Tensor): Tensor of corresponding masks with shape (N, C, H, W).
         augmentation_pipeline (albumentations.Compose): Augmentation pipeline to apply.
 
     Returns:
-        tuple: Augmented images and masks as numpy arrays.
+        tuple: Augmented images and masks as PyTorch tensors.
     """
     augmented_images, augmented_masks = [], []
+
     for img, mask in zip(images, masks):
-        # Convert images and masks to uint8 for augmentation
-        img = (img * 255).astype(np.uint8)
-        mask = (mask * 255).astype(np.uint8)
+        # Convert PyTorch tensors to NumPy arrays
+        img_np = img.squeeze(0).numpy() * 255  # Convert to (H, W) and scale to [0, 255]
+        mask_np = mask.squeeze(0).numpy() * 255
 
-        augmented = augmentation_pipeline(image=img, mask=mask)
+        # Apply augmentation
+        augmented = augmentation_pipeline(image=img_np.astype(np.uint8), mask=mask_np.astype(np.uint8))
 
-        # Normalize and append augmented data
-        augmented_images.append(augmented['image'] / 255.0)
-        augmented_masks.append(augmented['mask'] / 255.0)
+        # Convert augmented data back to PyTorch tensors
+        augmented_img = torch.tensor(augmented['image'] / 255.0, dtype=torch.float32).unsqueeze(0)
+        augmented_mask = torch.tensor(augmented['mask'] / 255.0, dtype=torch.float32).unsqueeze(0)
 
-    return np.array(augmented_images), np.array(augmented_masks)
+        augmented_images.append(augmented_img)
+        augmented_masks.append(augmented_mask)
+
+    # Stack all augmented data into tensors
+    return torch.stack(augmented_images), torch.stack(augmented_masks)
