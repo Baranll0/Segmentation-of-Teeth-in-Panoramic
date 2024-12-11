@@ -6,6 +6,26 @@ import os
 
 
 def train_model(model, train_loader, val_loader, device, num_epochs=100, learning_rate=1e-4, patience=10):
+    """
+    Train a UNet model for semantic segmentation with early stopping and model checkpointing.
+
+    Args:
+        model (torch.nn.Module): The UNet model to be trained.
+        train_loader (torch.utils.data.DataLoader): DataLoader for the training set.
+        val_loader (torch.utils.data.DataLoader): DataLoader for the validation set.
+        device (torch.device): Device to train the model on (e.g., 'cuda' or 'cpu').
+        num_epochs (int, optional): Maximum number of training epochs. Defaults to 100.
+        learning_rate (float, optional): Learning rate for the optimizer. Defaults to 1e-4.
+        patience (int, optional): Number of epochs to wait for validation loss improvement before early stopping. Defaults to 10.
+
+    Returns:
+        tuple:
+            - model (torch.nn.Module): The trained model.
+            - history (tuple): Training history containing lists of train/val losses and accuracies.
+
+    Outputs:
+        - Saves the best and last model weights to specified file paths.
+    """
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = dice_loss
 

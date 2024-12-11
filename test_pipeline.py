@@ -7,6 +7,31 @@ import numpy as np
 import cv2
 
 def test_pipeline():
+    """
+    Test pipeline for evaluating a trained UNet model on test images and visualizing predictions.
+
+    Steps:
+        1. Load the test dataset (images and masks).
+        2. Prepare a DataLoader for test data.
+        3. Load the trained UNet model from the specified path.
+        4. Perform predictions for the test images.
+        5. Visualize the original input image and the predicted segmentation overlay.
+
+    Paths:
+        image_dir (str): Directory containing the input test images.
+        mask_dir (str): Directory containing the corresponding test masks.
+        model_path (str): Path to the trained UNet model weights.
+
+    Visualization:
+        - The input image.
+        - The predicted segmentation mask overlaid on the input image with contours.
+
+    Outputs:
+        - Visualizations of input images with predicted segmentation overlays.
+
+    Returns:
+        None
+    """
     # Paths
     image_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/images"
     mask_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/masks"

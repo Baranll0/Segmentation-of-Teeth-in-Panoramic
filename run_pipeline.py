@@ -12,6 +12,32 @@ from src.inference.predict import predict_and_visualize
 import torch
 
 def main_pipeline():
+    """
+    Main pipeline for training a UNet model for image segmentation, saving visualizations,
+    and evaluating predictions.
+
+    Steps:
+        1. Load image and mask data.
+        2. Split the data into training and validation sets.
+        3. Apply data augmentation to expand the training set.
+        4. Prepare DataLoaders for training and validation.
+        5. Train the UNet model using the training data.
+        6. Save training visualizations (e.g., loss and dice coefficient plots).
+        7. Visualize predictions on validation data.
+
+    Paths:
+        image_dir (str): Path to the directory containing input images.
+        mask_dir (str): Path to the directory containing segmentation masks.
+        visualization_dir (str): Directory to save output visualizations.
+
+    Outputs:
+        - Trained model weights.
+        - Loss and dice coefficient plots.
+        - Visualization of predicted masks overlaid on input images.
+
+    Returns:
+        None
+    """
     # Paths
     image_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/images"
     mask_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/masks"
