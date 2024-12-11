@@ -87,8 +87,12 @@ The model was trained for up to 100 epochs but stopped early at epoch 43 due to 
 
 ![Train Model](https://i.imgur.com/b7KjpKm.png)
 
-These plots show the convergence of the model during training and validation.
+### Predict Examples
+![Predict 1](https://i.imgur.com/JukrBmG.png)
+![Predict 2](https://i.imgur.com/vS1SRZ1.png)
+![Predict 3](https://i.imgur.com/mpUdhRG.png)
 
+These plots show the convergence of the model during training and validation.
 ---
 
 1. Clone this repository:
