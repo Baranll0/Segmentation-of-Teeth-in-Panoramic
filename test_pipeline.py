@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from src.models.unet import UNet
 from src.preprocessing.dataset import load_images_and_masks
+from src.inference.postprocess import CCA_Analysis
 import numpy as np
 import cv2
 
@@ -15,19 +16,11 @@ def test_pipeline():
         2. Prepare a DataLoader for test data.
         3. Load the trained UNet model from the specified path.
         4. Perform predictions for the test images.
-        5. Visualize the original input image and the predicted segmentation overlay.
-
-    Paths:
-        image_dir (str): Directory containing the input test images.
-        mask_dir (str): Directory containing the corresponding test masks.
-        model_path (str): Path to the trained UNet model weights.
-
-    Visualization:
-        - The input image.
-        - The predicted segmentation mask overlaid on the input image with contours.
+        5. Apply postprocessing (CCA and morphological operations).
+        6. Visualize the original input image, ground truth mask, predicted segmentation, and overlay.
 
     Outputs:
-        - Visualizations of input images with predicted segmentation overlays.
+        - Visualizations of input images with predicted segmentation overlays and ground truth masks.
 
     Returns:
         None
@@ -56,7 +49,7 @@ def test_pipeline():
 
     # Predict and visualize
     print("Running predictions...")
-    for idx, (image, _) in enumerate(test_loader):
+    for idx, (image, ground_truth_mask) in enumerate(test_loader):
         image = image.to(device)  # Only pass the image
 
         with torch.no_grad():
@@ -68,22 +61,37 @@ def test_pipeline():
         # Convert to OpenCV format for overlay
         input_image = image.squeeze(0).squeeze().cpu().numpy()
         input_image = (input_image * 255).astype(np.uint8)  # Rescale to 0-255
-        overlay = cv2.cvtColor(input_image, cv2.COLOR_GRAY2BGR)  # Convert to BGR for overlay
 
-        # Create contours from the binary mask
-        contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        overlay_with_contours = cv2.drawContours(overlay, contours, -1, (0, 255, 0), 2)  # Draw green contours
+        # Apply postprocessing
+        processed_image, teeth_count = CCA_Analysis(input_image, binary_mask)
 
-        # Visualize input and overlaid output
-        plt.figure(figsize=(15, 5))
-        plt.subplot(1, 2, 1)
+        # Ground truth mask for visualization
+        gt_mask = ground_truth_mask.squeeze().numpy()
+
+        # Visualize input, ground truth, prediction, and overlay
+        plt.figure(figsize=(20, 5))
+
+        plt.subplot(1, 4, 1)
         plt.title("Input Image")
         plt.imshow(input_image, cmap="gray")
+        plt.axis("off")
 
-        plt.subplot(1, 2, 2)
-        plt.title("Predicted Overlay")
-        plt.imshow(cv2.cvtColor(overlay_with_contours, cv2.COLOR_BGR2RGB))
+        plt.subplot(1, 4, 2)
+        plt.title("Ground Truth Mask")
+        plt.imshow(gt_mask, cmap="gray")
+        plt.axis("off")
 
+        plt.subplot(1, 4, 3)
+        plt.title("Predicted Mask")
+        plt.imshow(binary_mask, cmap="gray")
+        plt.axis("off")
+
+        plt.subplot(1, 4, 4)
+        plt.title(f"Processed Overlay (Teeth: {teeth_count})")
+        plt.imshow(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
+        plt.axis("off")
+
+        plt.tight_layout()
         plt.show()
 
         # Stop after visualizing 5 samples

@@ -5,7 +5,7 @@ from src.evaluation.metrics import dice_loss, dice_coefficient
 import os
 
 
-def train_model(model, train_loader, val_loader, device, num_epochs=100, learning_rate=1e-4, patience=10):
+def train_model(model, train_loader, val_loader, device, num_epochs=100, learning_rate=1e-4):
     """
     Train a UNet model for semantic segmentation with early stopping and model checkpointing.
 
@@ -91,11 +91,6 @@ def train_model(model, train_loader, val_loader, device, num_epochs=100, learnin
         else:
             patience_counter += 1
             print(f"No improvement in Val Loss for {patience_counter} epoch(s).")
-
-        # Early stopping
-        if patience_counter >= patience:
-            print(f"Early stopping triggered after {patience} epochs without improvement.")
-            break
 
     # Save the last model
     torch.save(model.state_dict(), last_model_path)
