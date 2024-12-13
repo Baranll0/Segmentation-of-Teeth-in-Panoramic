@@ -1,226 +1,83 @@
-import os
-import random
-import numpy as np
-import matplotlib.pyplot as plt
 import cv2
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from sklearn.metrics import f1_score
-from natsort import natsorted
-from src.models.unet import UNet
-from scipy.spatial import distance as dist
-from imutils import perspective
+from torch.utils.data import DataLoader
+from src.preprocessing.dataset import TeethDataset
+from src.models.unet import TeethUNet
+import os
+import matplotlib.pyplot as plt
 
-# -------------------------------
-# Veri Hazırlık Fonksiyonları
-# -------------------------------
-def convert_one_channel(img):
-    if len(img.shape) > 2:
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    return img
+# Konfigürasyon
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+MODEL_PATH = '/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs/model_checkpoints/best_model.pth'
+DATA_PATH = '/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays'
+RESULTS_DIR = '/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs/results'
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
-def pre_images(resize_shape, path):
-    dirs = natsorted(os.listdir(path))
-    images_list = []
-    sizes = []
-
-    for filename in dirs:
-        img_path = os.path.join(path, filename)
-        img = cv2.imread(img_path)
-
-        if img is None:
-            raise FileNotFoundError(f"Görüntü dosyası bulunamadı: {img_path}")
-
-        sizes.append(img.shape[:2])
-        img = cv2.resize(img, resize_shape, interpolation=cv2.INTER_AREA)
-        img = convert_one_channel(img)
-        images_list.append(img)
-
-    images = np.stack(images_list, axis=0)
-    images = images.reshape(len(dirs), 1, resize_shape[1], resize_shape[0])
-    return images, sizes
-
-def pre_masks(resize_shape, path):
-    dirs = natsorted(os.listdir(path))
-    masks_list = []
-
-    for filename in dirs:
-        mask_path = os.path.join(path, filename)
-        mask = cv2.imread(mask_path)
-
-        if mask is None:
-            raise FileNotFoundError(f"Maske dosyası bulunamadı: {mask_path}")
-
-        mask = cv2.resize(mask, resize_shape, interpolation=cv2.INTER_NEAREST)
-        mask = convert_one_channel(mask)
-        masks_list.append(mask)
-
-    masks = np.stack(masks_list, axis=0)
-    masks = masks.reshape(len(dirs), 1, resize_shape[1], resize_shape[0])
-    return masks
-
-def midpoint(ptA, ptB):
-    return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
-
-
-def CCA_Analysis(orig_image, predict_image, erode_iteration, open_iteration):
-    # Predict image'in boyutlarını kontrol et
-    print(f"Predict image shape before processing: {predict_image.shape}")
-
-    # Fazladan boyutları kontrol et ve sıkıştır
-    while len(predict_image.shape) > 2 and predict_image.shape[0] == 1:
-        predict_image = predict_image.squeeze(0)  # İlk ekseni sıkıştır
-
-    # Eğer batch boyutu varsa (örneğin 2, 1, 512, 512), sadece ilk örneği al
-    if len(predict_image.shape) == 4:
-        predict_image = predict_image[0]  # İlk örneği al
-        print(f"Predict image shape after batch removal: {predict_image.shape}")
-
-    # Eğer hala 3 boyutluysa, tek kanallı hale getir
-    if len(predict_image.shape) == 3 and predict_image.shape[0] == 1:
-        predict_image = predict_image.squeeze(0)  # İlk ekseni sıkıştır
-        print(f"Predict image shape after squeeze: {predict_image.shape}")
-
-    # Predict image'i 8-bit formatına dönüştür
-    predict_image = predict_image.astype(np.uint8)
-
-    kernel1 = np.ones((5, 5), dtype=np.float32)
-    kernel_sharpening = np.array([[-1, -1, -1],
-                                  [-1, 9, -1],
-                                  [-1, -1, -1]])
-    image = predict_image
-    image2 = orig_image
-
-    # Görüntü işlemleri
-    image = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel1, iterations=open_iteration)
-    image = cv2.filter2D(image, -1, kernel_sharpening)
-    image = cv2.erode(image, kernel1, iterations=erode_iteration)
-
-    thresh = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    labels = cv2.connectedComponents(thresh, connectivity=8)[1]
-    a = np.unique(labels)
-    count2 = 0
-    for label in a:
-        if label == 0:
-            continue
-
-        mask = np.zeros(thresh.shape, dtype="uint8")
-        mask[labels == label] = 255
-        cnts, _ = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[0]
-        c_area = cv2.contourArea(cnts)
-
-        if c_area > 2000:
-            count2 += 1
-
-        rect = cv2.minAreaRect(cnts)
-        box = cv2.boxPoints(rect)
-        box = np.array(box, dtype="int")
-        box = perspective.order_points(box)
-        color = (0, 255, 0)
-        cv2.drawContours(image2, [box.astype("int")], 0, color, 2)
-
-    teeth_count = count2
-    return image2, teeth_count
-
-
-# -------------------------------
-# PyTorch Dataset Sınıfı
-# -------------------------------
-class DentalDataset(Dataset):
-    def __init__(self, images, masks):
-        self.images = images
-        self.masks = masks
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        image = torch.tensor(self.images[idx], dtype=torch.float32)
-        mask = torch.tensor(self.masks[idx], dtype=torch.float32)
-        return image, mask
-
-# -------------------------------
-# Veri Yolları ve Ayarlar
-# -------------------------------
-base_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays"
-images_path = os.path.join(base_path, "images/")
-masks_path = os.path.join(base_path, "masks/")
-
-# Görüntü ve Maske Verilerinin Hazırlanması
-X, X_sizes = pre_images((512, 512), images_path)
-Y = pre_masks((512, 512), masks_path)
-
-# Normalizasyon
-X = X / 255.0
-Y = Y / 255.0
-
-# Eğitim ve Test Setlerine Ayırma
-x_train, y_train = X[:105], Y[:105]
-x_test, y_test = X[105:], Y[105:]
-
-# Dataset ve DataLoader
-train_dataset = DentalDataset(x_train, y_train)
-test_dataset = DentalDataset(x_test, y_test)
-
-train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
-
-# Model Tanımı
-model = UNet()
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = model.to(device)
-
-# Loss ve Optimizer
-criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-# Eğitim Döngüsü
-num_epochs = 100
-for epoch in range(num_epochs):
-    model.train()
-    train_loss = 0
-    for images, masks in train_loader:
-        images, masks = images.to(device), masks.to(device)
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, masks)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-
-    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {train_loss/len(train_loader):.4f}")
-
-# Değerlendirme ve Post-Processing
-# Değerlendirme ve Post-Processing
+# Modeli yükle
+model = TeethUNet().to(DEVICE)
+model.load_state_dict(torch.load(MODEL_PATH))
 model.eval()
-with torch.no_grad():
-    for idx, (images, masks) in enumerate(test_loader):
-        images = images.to(device)
-        outputs = model(images).squeeze(0).cpu().numpy()  # Çıkış maskesi
-        pred_mask = (outputs > 0.5).astype(np.uint8) * 255  # İkili maske
 
-        # Orijinal görüntüyü işlerken dikkat
-        original_image = images.cpu().numpy()[0, 0, :, :] * 255  # İlk görüntüyü al ve skala yap
-        original_image = original_image.astype(np.uint8)  # 8-bit dönüşüm
-        original_image = cv2.cvtColor(original_image, cv2.COLOR_GRAY2BGR)  # BGR formatına dönüştür
+# Diş sayma ve maske işleme fonksiyonu
+def process_mask(predicted_mask, ground_truth_mask):
+    # İkili maske oluştur
+    binary_mask = (predicted_mask > 0.5).astype(np.uint8)
 
-        # Post-processing ve görselleştirme
-        result_image, teeth_count = CCA_Analysis(original_image, pred_mask, erode_iteration=3, open_iteration=2)
+    # Morfolojik işlemler: Erozyon ve Açma
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    eroded_mask = cv2.erode(binary_mask, kernel, iterations=1)
+    opened_mask = cv2.morphologyEx(eroded_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    # Bağlantılı bileşen analizi
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(opened_mask, connectivity=8)
+
+    # Küçük bileşenleri kaldır
+    min_size = 100  # Piksel cinsinden minimum bileşen boyutu
+    filtered_mask = np.zeros_like(labels, dtype=np.uint8)
+    for i in range(1, num_labels):
+        if stats[i, cv2.CC_STAT_AREA] >= min_size:
+            filtered_mask[labels == i] = 1
+
+    # Gerçek maske ile kesişim
+    ground_truth_binary = (ground_truth_mask > 0.5).astype(np.uint8)
+    final_mask = cv2.bitwise_and(filtered_mask, ground_truth_binary)
+
+    # Diş sayısını belirle
+    num_teeth, _, _, _ = cv2.connectedComponentsWithStats(final_mask, connectivity=8)
+
+    return num_teeth - 1, final_mask  # Arka planı çıkarmak için 1 çıkarılır
+
+# Test verisinde modeli değerlendir
+def test_model():
+    test_dataset = TeethDataset(DATA_PATH, mode='val')
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+    for idx, (image, mask) in enumerate(test_loader):
+        image, mask = image.to(DEVICE), mask.to(DEVICE)
+        with torch.no_grad():
+            prediction = torch.sigmoid(model(image)).cpu().numpy().squeeze()
+
+        # Maske işleme ve diş sayma
+        tooth_count, processed_mask = process_mask(prediction, mask.cpu().numpy().squeeze())
 
         # Görselleştirme
-        plt.figure(figsize=(12, 6))
-        plt.subplot(1, 2, 1)
-        plt.title("Original Image")
-        plt.imshow(original_image, cmap="gray")
+        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+        axes[0].imshow(image.cpu().squeeze().permute(1, 2, 0))
+        axes[0].set_title('Girdi Görüntüsü')
+        axes[1].imshow(mask.cpu().squeeze(), cmap='gray')
+        axes[1].set_title('Gerçek Maske')
+        axes[2].imshow(prediction, cmap='gray')
+        axes[2].set_title('Tahmin Edilen Maske')
+        axes[3].imshow(processed_mask, cmap='gray')
+        axes[3].set_title(f'İşlenmiş Maske\nDiş Sayısı: {tooth_count}')
+        plt.tight_layout()
+        plt.savefig(os.path.join(RESULTS_DIR, f'test_result_{idx}.png'))
+        plt.close()
 
-        plt.subplot(1, 2, 2)
-        plt.title(f"Processed Image - Teeth Count: {teeth_count}")
-        plt.imshow(result_image)
+        print(f"Görüntü {idx}: Diş Sayısı = {tooth_count}")
 
-        plt.show()
-
-        if idx == 4:  # Sadece ilk 5 görüntü üzerinde değerlendirme
-            break
+# Ana işlem
+if __name__ == "__main__":
+    print("Test verisinde modeli değerlendiriyor...")
+    test_model()
