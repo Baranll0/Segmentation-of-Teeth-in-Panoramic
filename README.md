@@ -25,6 +25,9 @@ This project focuses on the semantic segmentation of teeth in panoramic X-rays u
 - Validation through metrics such as Dice Coefficient and loss.
 - Visualization of training performance and predictions.
 
+**Note: The developed project will be improved and republished.**
+
+
 ---
 
 ## Dataset
