@@ -1,99 +1,124 @@
-import torch
-import torch.optim as optim
-from tqdm import tqdm
-from src.evaluation.metrics import dice_loss, dice_coefficient
 import os
+import json
+import torch
+from torch.utils.data import DataLoader
+import torch.nn as nn
+import torch.optim as optim
+from torchvision.transforms import ColorJitter
+from src.preprocessing.dataset import load_datasets
+from src.models.unet import UNet
+from tqdm import tqdm
+import numpy as np
+import evaluate
+import torchvision.transforms as T
 
+# Veri yolları
+IMG_DIR = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/img"
+MASK_DIR = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/mask"
+META_FILE = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/datasetkaggle/Teeth Segmentation JSON/meta.json"
 
-def train_model(model, train_loader, val_loader, device, num_epochs=100, learning_rate=1e-4):
-    """
-    Train a UNet model for semantic segmentation with early stopping and model checkpointing.
+# Meta.json'dan sınıf sayısını al
+def get_num_classes(meta_file):
+    with open(meta_file, "r") as f:
+        meta_data = json.load(f)
+    return len(meta_data["classes"])
 
-    Args:
-        model (torch.nn.Module): The UNet model to be trained.
-        train_loader (torch.utils.data.DataLoader): DataLoader for the training set.
-        val_loader (torch.utils.data.DataLoader): DataLoader for the validation set.
-        device (torch.device): Device to train the model on (e.g., 'cuda' or 'cpu').
-        num_epochs (int, optional): Maximum number of training epochs. Defaults to 100.
-        learning_rate (float, optional): Learning rate for the optimizer. Defaults to 1e-4.
-        patience (int, optional): Number of epochs to wait for validation loss improvement before early stopping. Defaults to 10.
+# Sınıf sayısını meta.json'dan al
+num_classes = get_num_classes(META_FILE)
+print(f"Sınıf Sayısı: {num_classes}")
 
-    Returns:
-        tuple:
-            - model (torch.nn.Module): The trained model.
-            - history (tuple): Training history containing lists of train/val losses and accuracies.
+# Dataset yükleme
+dataset = load_datasets(IMG_DIR, MASK_DIR)
 
-    Outputs:
-        - Saves the best and last model weights to specified file paths.
-    """
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = dice_loss
+# Verileri dönüştürme ve normalize etme
+def train_transforms(example_batch):
+    images = [T.ToTensor()(x).float() for x in example_batch["pixel_values"]]
+    labels = [T.ToTensor()(x).float() for x in example_batch["label"]]
+    return {"pixel_values": torch.stack(images), "label": torch.stack(labels)}
 
-    train_loss, val_loss, train_accuracy, val_accuracy = [], [], [], []
-    best_val_loss = float('inf')
-    best_model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs/models/unet_best.pth"
-    last_model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs/models/unet_last.pth"
+def val_transforms(example_batch):
+    images = [T.ToTensor()(x).float() for x in example_batch["pixel_values"]]
+    labels = [T.ToTensor()(x).float() for x in example_batch["label"]]
+    return {"pixel_values": torch.stack(images), "label": torch.stack(labels)}
 
-    # Early stopping variables
-    patience_counter = 0
+# Transform'ları uygulama
+dataset["train"].set_transform(train_transforms)
+dataset["validation"].set_transform(val_transforms)
 
-    model.to(device)
-    for epoch in range(num_epochs):
-        model.train()
-        epoch_loss = 0
-        epoch_accuracy = 0
-        loop = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=False)
+# DataLoader oluşturma
+train_loader = DataLoader(dataset["train"], batch_size=2, shuffle=True)
+val_loader = DataLoader(dataset["validation"], batch_size=2)
 
-        for images, masks in loop:
-            images, masks = images.to(device), masks.to(device)
+# Model ve Loss
+model = UNet(input_channels=3, num_classes=num_classes).cuda()
+criterion = nn.CrossEntropyLoss()
 
-            optimizer.zero_grad()
+# Optimizer
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
+
+# Evaluation Metric
+metric = evaluate.load("mean_iou")
+
+def compute_metrics(predictions, labels):
+    pred_labels = predictions.argmax(dim=1).detach().cpu().numpy()
+    true_labels = labels.detach().cpu().numpy()
+    return metric.compute(predictions=pred_labels, references=true_labels, num_labels=num_classes, ignore_index=0)
+
+# Eğitim döngüsü
+num_epochs = 20
+best_val_loss = float('inf')
+output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs"
+
+for epoch in range(num_epochs):
+    model.train()
+    train_loss = 0.0
+    train_bar = tqdm(train_loader, desc=f"Training Epoch {epoch + 1}/{num_epochs}")
+
+    for batch in train_bar:
+        images = batch["pixel_values"].cuda()
+        labels = batch["label"].cuda().long().squeeze(1)
+
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        train_loss += loss.item()
+        train_bar.set_postfix(loss=train_loss / len(train_loader))
+
+    # Validation
+    model.eval()
+    val_loss = 0.0
+    val_bar = tqdm(val_loader, desc=f"Validation Epoch {epoch + 1}/{num_epochs}")
+    all_preds, all_labels = [], []
+
+    with torch.no_grad():
+        for batch in val_bar:
+            images = batch["pixel_values"].cuda()
+            labels = batch["label"].cuda().long().squeeze(1)
+
             outputs = model(images)
-            loss = criterion(masks, outputs)
-            loss.backward()
-            optimizer.step()
+            loss = criterion(outputs, labels)
 
-            epoch_loss += loss.item()
-            accuracy = dice_coefficient(masks, outputs).item()
-            epoch_accuracy += accuracy
+            val_loss += loss.item()
+            all_preds.append(outputs)
+            all_labels.append(labels)
 
-            # Update tqdm bar with loss and accuracy
-            loop.set_postfix(loss=loss.item(), accuracy=accuracy)
+    # Metric hesaplama
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
+    metrics = compute_metrics(all_preds, all_labels)
 
-        train_loss.append(epoch_loss / len(train_loader))
-        train_accuracy.append(epoch_accuracy / len(train_loader))
+    print(
+        f"Epoch {epoch + 1}/{num_epochs} -> Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Metrics: {metrics}")
 
-        # Validation
-        model.eval()
-        val_epoch_loss = 0
-        val_epoch_accuracy = 0
-        with torch.no_grad():
-            for images, masks in val_loader:
-                images, masks = images.to(device), masks.to(device)
-                outputs = model(images)
-                loss = criterion(masks, outputs)
-                val_epoch_loss += loss.item()
-                val_epoch_accuracy += dice_coefficient(masks, outputs).item()
+    # En iyi modeli kaydet
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(model.state_dict(), os.path.join(output_dir, "best.pth"))
+        print(f"Best model saved with Val Loss: {val_loss:.4f}")
 
-        val_loss.append(val_epoch_loss / len(val_loader))
-        val_accuracy.append(val_epoch_accuracy / len(val_loader))
-
-        print(f"Epoch {epoch + 1}/{num_epochs}, "
-              f"Train Loss: {train_loss[-1]:.4f}, Train Accuracy: {train_accuracy[-1]:.4f}, "
-              f"Val Loss: {val_loss[-1]:.4f}, Val Accuracy: {val_accuracy[-1]:.4f}")
-
-        # Save the best model
-        if val_loss[-1] < best_val_loss:
-            best_val_loss = val_loss[-1]
-            patience_counter = 0
-            torch.save(model.state_dict(), best_model_path)
-            print(f"Best model saved at epoch {epoch + 1} with Val Loss: {best_val_loss:.4f}")
-        else:
-            patience_counter += 1
-            print(f"No improvement in Val Loss for {patience_counter} epoch(s).")
-
-    # Save the last model
-    torch.save(model.state_dict(), last_model_path)
-    print(f"Last model saved at epoch {epoch + 1}")
-
-    return model, (train_loss, val_loss, train_accuracy, val_accuracy)
+    # Son modeli kaydet
+    torch.save(model.state_dict(), os.path.join(output_dir, "last.pth"))
+    print(f"Last model saved at the end of epoch {epoch + 1}")
