@@ -2,77 +2,54 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-class UNet(nn.Module):
-    def __init__(self, input_channels=1, output_channels=1):
-        super(UNet, self).__init__()
+class NestedUNet(nn.Module):
+    def __init__(self, input_channels=3, output_channels=33):  # 33 sınıf için
+        super(NestedUNet, self).__init__()
+        nb_filter = [64, 128, 256, 512, 1024]
 
         # Encoder
-        self.enc1 = self.conv_block(input_channels, 32, dropout=0.1)
-        self.enc2 = self.conv_block(32, 64, dropout=0.2)
-        self.enc3 = self.conv_block(64, 128, dropout=0.3)
-        self.enc4 = self.conv_block(128, 256, dropout=0.4)
-        self.enc5 = self.conv_block(256, 512, dropout=0.5)
+        self.conv0_0 = self.conv_block(input_channels, nb_filter[0])
+        self.conv1_0 = self.conv_block(nb_filter[0], nb_filter[1])
+        self.conv2_0 = self.conv_block(nb_filter[1], nb_filter[2])
+        self.conv3_0 = self.conv_block(nb_filter[2], nb_filter[3])
+        self.conv4_0 = self.conv_block(nb_filter[3], nb_filter[4])
 
         # Decoder
-        self.upconv4 = nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1)
-        self.dec4 = self.conv_block(512, 256, dropout=0.4)
+        self.up1_0 = self.up_block(nb_filter[1], nb_filter[0])
+        self.up2_0 = self.up_block(nb_filter[2], nb_filter[1])
+        self.up3_0 = self.up_block(nb_filter[3], nb_filter[2])
+        self.up4_0 = self.up_block(nb_filter[4], nb_filter[3])
 
-        self.upconv3 = nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1)
-        self.dec3 = self.conv_block(256, 128, dropout=0.3)
+        # Final output layer
+        self.final = nn.Conv2d(nb_filter[0], output_channels, kernel_size=1)
 
-        self.upconv2 = nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1)
-        self.dec2 = self.conv_block(128, 64, dropout=0.2)
-
-        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1)
-        self.dec1 = self.conv_block(64, 32, dropout=0.1)
-
-        # Output
-        self.final_conv = nn.Conv2d(32, output_channels, kernel_size=1, padding=0)
-
-    def conv_block(self, in_channels, out_channels, dropout):
+    def conv_block(self, in_channels, out_channels):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
             nn.BatchNorm2d(out_channels),
-            nn.Dropout(dropout)
+            nn.ReLU(inplace=True)
+        )
+
+    def up_block(self, in_channels, out_channels):
+        return nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
+            self.conv_block(out_channels, out_channels)
         )
 
     def forward(self, x):
-        # Encoder
-        enc1 = self.enc1(x)
-        enc2 = self.enc2(F.max_pool2d(enc1, kernel_size=2))
-        enc3 = self.enc3(F.max_pool2d(enc2, kernel_size=2))
-        enc4 = self.enc4(F.max_pool2d(enc3, kernel_size=2))
-        enc5 = self.enc5(F.max_pool2d(enc4, kernel_size=2))
+        x0_0 = self.conv0_0(x)
+        x1_0 = self.conv1_0(F.max_pool2d(x0_0, 2))
+        x2_0 = self.conv2_0(F.max_pool2d(x1_0, 2))
+        x3_0 = self.conv3_0(F.max_pool2d(x2_0, 2))
+        x4_0 = self.conv4_0(F.max_pool2d(x3_0, 2))
 
-        # Decoder
-        dec4 = self.upconv4(enc5)
-        dec4 = torch.cat((dec4, enc4), dim=1)
-        dec4 = self.dec4(dec4)
+        x1_0 = self.up1_0(x1_0)
+        x2_0 = self.up2_0(x2_0)
+        x3_0 = self.up3_0(x3_0)
+        x4_0 = self.up4_0(x4_0)
 
-        dec3 = self.upconv3(dec4)
-        dec3 = torch.cat((dec3, enc3), dim=1)
-        dec3 = self.dec3(dec3)
-
-        dec2 = self.upconv2(dec3)
-        dec2 = torch.cat((dec2, enc2), dim=1)
-        dec2 = self.dec2(dec2)
-
-        dec1 = self.upconv1(dec2)
-        dec1 = torch.cat((dec1, enc1), dim=1)
-        dec1 = self.dec1(dec1)
-
-        # Output
-        output = self.final_conv(dec1)
-        return output
-
-
-# Example usage
-if __name__ == "__main__":
-    model = UNet(input_channels=1, output_channels=1)
-    x = torch.randn(1, 1, 512, 512)
-    output = model(x)
-    print(output.shape)
+        out = self.final(x1_0)
+        return out
