@@ -3,10 +3,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from torchvision.transforms import Compose, ToTensor, Normalize
 from tqdm import tqdm
-from model import UNet
 from PIL import Image
+import matplotlib.pyplot as plt
+
+# Import Models
+from model_unetplusplus import NestedUNet
+from model_resnet_unet import ResNetUNet
 
 # Paths
 output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed"
@@ -15,10 +19,9 @@ os.makedirs(checkpoints_dir, exist_ok=True)
 
 # Training parameters
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-epochs = 10
-batch_size = 2
+epochs = 100
+batch_size = 4
 learning_rate = 0.001
-resize_dim = (512, 512)
 
 # Loss and metrics
 def dice_coefficient(pred, target, smooth=1):
@@ -27,21 +30,30 @@ def dice_coefficient(pred, target, smooth=1):
     intersection = (pred * target).sum()
     return (2. * intersection + smooth) / (pred.sum() + target.sum() + smooth)
 
-def iou(pred, target, smooth=1):
-    pred = torch.sigmoid(pred)
-    pred = (pred > 0.5).float()
-    intersection = (pred * target).sum()
-    union = pred.sum() + target.sum() - intersection
-    return (intersection + smooth) / (union + smooth)
+class DiceLoss(nn.Module):
+    def __init__(self, smooth=1):
+        super(DiceLoss, self).__init__()
+        self.smooth = smooth
 
-# Custom dataset loader
+    def forward(self, pred, target):
+        pred = torch.sigmoid(pred)
+        intersection = (pred * target).sum()
+        return 1 - (2. * intersection + self.smooth) / (pred.sum() + target.sum() + self.smooth)
+
+
 class TeethDataset(torch.utils.data.Dataset):
     def __init__(self, image_dir, mask_dir, transform=None):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.images = sorted(os.listdir(image_dir))
         self.masks = sorted(os.listdir(mask_dir))
-        self.transform = transform
+
+        # Default normalization
+        self.transform = Compose([
+            ToTensor(),
+            Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # Normalize RGB images
+        ])
+        self.mask_transform = ToTensor()  # No normalization for masks
 
     def __len__(self):
         return len(self.images)
@@ -51,14 +63,16 @@ class TeethDataset(torch.utils.data.Dataset):
         mask_path = os.path.join(self.mask_dir, self.masks[idx])
 
         image = Image.open(image_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L")
+        mask = Image.open(mask_path).convert("L")  # Mask as a single channel
 
-        if self.transform:
-            image = self.transform(image)
-            mask = self.transform(mask)
+        # Apply transformations
+        image = self.transform(image)
+        mask = self.mask_transform(mask)
 
         return image, mask
 
+
+# Training function
 # Training function
 def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs):
     best_iou = 0.0
@@ -68,82 +82,87 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
 
         # Training phase
         model.train()
-        train_loss = 0.0
-        train_dice = 0.0
-        train_iou = 0.0
+        train_loss, train_dice = 0.0, 0.0
 
         loop = tqdm(train_loader, leave=False)
         for images, masks in loop:
             images, masks = images.to(device), masks.to(device)
+            optimizer.zero_grad()
 
-            # Forward pass
             outputs = model(images)
             loss = criterion(outputs, masks)
-
-            # Backward pass
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # Metrics
             train_loss += loss.item() * images.size(0)
             train_dice += dice_coefficient(outputs, masks).item() * images.size(0)
-            train_iou += iou(outputs, masks).item() * images.size(0)
 
-            # Update tqdm loop
-            loop.set_description(f"Train")
             loop.set_postfix(loss=loss.item())
 
         train_loss /= len(train_loader.dataset)
         train_dice /= len(train_loader.dataset)
-        train_iou /= len(train_loader.dataset)
 
-        # Validation phase
-        model.eval()
-        val_loss = 0.0
-        val_dice = 0.0
-        val_iou = 0.0
-
-        with torch.no_grad():
-            for images, masks in val_loader:
-                images, masks = images.to(device), masks.to(device)
-                outputs = model(images)
-                loss = criterion(outputs, masks)
-
-                val_loss += loss.item() * images.size(0)
-                val_dice += dice_coefficient(outputs, masks).item() * images.size(0)
-                val_iou += iou(outputs, masks).item() * images.size(0)
-
-        val_loss /= len(val_loader.dataset)
-        val_dice /= len(val_loader.dataset)
-        val_iou /= len(val_loader.dataset)
-
-        print(f"Train Loss: {train_loss:.4f}, Train Dice: {train_dice:.4f}, Train IoU: {train_iou:.4f}")
-        print(f"Val Loss: {val_loss:.4f}, Val Dice: {val_dice:.4f}, Val IoU: {val_iou:.4f}")
-
-        # Save model
+        print(f"Train Loss: {train_loss:.4f}, Train Dice: {train_dice:.4f}")
         torch.save(model.state_dict(), os.path.join(checkpoints_dir, "last.pth"))
-        if val_iou > best_iou:
-            best_iou = val_iou
+
+        # Save best model
+        if train_dice > best_iou:
+            best_iou = train_dice
             torch.save(model.state_dict(), os.path.join(checkpoints_dir, "best.pth"))
 
-# Main script
+        # Visualize predictions after each epoch
+        print(f"Epoch {epoch + 1}: Tahmin Grafikleri")
+        visualize_sample(model, train_loader)
+
+# Visualization function
+def visualize_sample(model, train_loader):
+    model.eval()
+    with torch.no_grad():
+        for sample_image, sample_mask in train_loader:
+            sample_image = sample_image[0].to(device)
+            sample_mask = sample_mask[0].cpu().squeeze().numpy()
+
+            pred_mask = model(sample_image.unsqueeze(0))
+            pred_mask = torch.sigmoid(pred_mask).cpu().squeeze().numpy()
+
+            sample_image = sample_image.cpu().numpy().transpose(1, 2, 0)
+            plt.figure(figsize=(12, 4))
+            plt.subplot(1, 3, 1); plt.title("Input Image"); plt.imshow(sample_image)
+            plt.subplot(1, 3, 2); plt.title("True Mask"); plt.imshow(sample_mask, cmap="gray")
+            plt.subplot(1, 3, 3); plt.title("Predicted Mask"); plt.imshow(pred_mask, cmap="gray")
+            plt.show()
+            break
+
 if __name__ == "__main__":
+    # Model Selection
+    print("Model Seçimi:")
+    print("1: UNet++")
+    print("2: ResNet Encoder'lı UNet")
+    choice = input("Kullanmak istediğiniz modeli seçin (1/2): ")
+
     # Dataset paths
     train_image_dir = os.path.join(output_dir, "resized_images")
     train_mask_dir = os.path.join(output_dir, "resized_masks")
 
-    # Dataset and DataLoader
-    train_dataset = TeethDataset(train_image_dir, train_mask_dir, transform=ToTensor())
-    val_dataset = TeethDataset(train_image_dir, train_mask_dir, transform=ToTensor())
+    train_dataset = TeethDataset(train_image_dir, train_mask_dir)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    # Model Initialization
+    if choice == "1":
+        print("UNet++ modeli kullanılıyor...")
+        model = NestedUNet(input_channels=3, output_channels=1).to(device)
+    elif choice == "2":
+        print("ResNet Encoder'lı UNet modeli kullanılıyor...")
+        model = ResNetUNet(input_channels=3, output_channels=1).to(device)
+    else:
+        raise ValueError("Geçersiz seçim! Lütfen 1 veya 2 girin.")
 
-    # Initialize model, loss, and optimizer
-    model = UNet(input_channels=3, output_channels=1).to(device)
-    criterion = nn.BCEWithLogitsLoss()
+    # Training Setup
+    criterion = DiceLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # Train the model
-    train_model(model, train_loader, val_loader, criterion, optimizer, epochs)
+    train_model(model, train_loader, train_loader, criterion, optimizer, epochs)
+
+    # Visualize a sample
+    visualize_sample(model, train_loader)
