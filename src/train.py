@@ -21,7 +21,8 @@ os.makedirs(checkpoints_dir, exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 epochs = 100
 batch_size = 4
-learning_rate = 0.001
+learning_rate = 0.0001
+
 
 # Loss and metrics
 def dice_coefficient(pred, target, smooth=1):
@@ -114,7 +115,6 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         print(f"Epoch {epoch + 1}: Tahmin Grafikleri")
         visualize_sample(model, train_loader)
 
-# Visualization function
 def visualize_sample(model, train_loader):
     model.eval()
     with torch.no_grad():
@@ -125,7 +125,10 @@ def visualize_sample(model, train_loader):
             pred_mask = model(sample_image.unsqueeze(0))
             pred_mask = torch.sigmoid(pred_mask).cpu().squeeze().numpy()
 
+            # Input image normalization to [0, 1] for visualization
             sample_image = sample_image.cpu().numpy().transpose(1, 2, 0)
+            sample_image = (sample_image - sample_image.min()) / (sample_image.max() - sample_image.min())
+
             plt.figure(figsize=(12, 4))
             plt.subplot(1, 3, 1); plt.title("Input Image"); plt.imshow(sample_image)
             plt.subplot(1, 3, 2); plt.title("True Mask"); plt.imshow(sample_mask, cmap="gray")
