@@ -1,3 +1,6 @@
+checkpoints/
+__pycache__/
+data/
+*.pth
+notebooks/
 /dataset/
-/checkpoints/
-
