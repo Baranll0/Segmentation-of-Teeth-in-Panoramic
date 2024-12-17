@@ -135,8 +135,8 @@ def predict(image_path, true_mask_path, model_path, num_classes, device):
 
 if __name__ == "__main__":
     # Paths
-    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_images/32.jpg"
-    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/32.png"
+    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_images/65.jpg"
+    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/65.png"
     model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/best3.pth"
     num_classes = 33
 
