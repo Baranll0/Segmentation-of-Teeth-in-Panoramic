@@ -79,10 +79,10 @@ def train_model(model, train_loader, criterion, optimizer, device, epochs, check
         # Save 'last.pth'
         torch.save(model.state_dict(), os.path.join(checkpoints_dir, "last.pth"))
 
-        # Save 'best.pth'
+        # Save 'best3.pth'
         if avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(model.state_dict(), os.path.join(checkpoints_dir, "best.pth"))
+            torch.save(model.state_dict(), os.path.join(checkpoints_dir, "best3.pth"))
             print("Best model saved!")
 
         # Visualize sample predictions after each epoch
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # Hyperparameters
     batch_size = 4
     learning_rate = 0.001
-    epochs = 50
+    epochs = 200
     num_classes = get_num_classes(meta_file)
 
     # Device
