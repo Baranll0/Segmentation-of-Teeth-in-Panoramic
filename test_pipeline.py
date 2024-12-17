@@ -1,102 +1,147 @@
+import os
 import torch
-import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, TensorDataset
-from src.models.unet import UNet
-from src.preprocessing.dataset import load_images_and_masks
-from src.inference.postprocess import CCA_Analysis
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+from torchvision.transforms import Compose, ToTensor, Normalize
+from scipy.spatial import distance as dist
+from imutils import perspective
+from PIL import Image
+from src.model import NestedUNet
+import matplotlib.colors as mcolors
 
-def test_pipeline():
-    """
-    Test pipeline for evaluating a trained UNet model on test images and visualizing predictions.
+def midpoint(ptA, ptB):
+    """Calculate midpoint between two points."""
+    return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
-    Steps:
-        1. Load the test dataset (images and masks).
-        2. Prepare a DataLoader for test data.
-        3. Load the trained UNet model from the specified path.
-        4. Perform predictions for the test images.
-        5. Apply postprocessing (CCA and morphological operations).
-        6. Visualize the original input image, ground truth mask, predicted segmentation, and overlay.
 
-    Outputs:
-        - Visualizations of input images with predicted segmentation overlays and ground truth masks.
-
-    Returns:
-        None
-    """
-    # Paths
-    image_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/images"
-    mask_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/masks"
-    model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/outputs/models/unet_best.pth"
-
-    # Load data
-    print("Loading images and masks...")
-    images, masks = load_images_and_masks(image_dir, mask_dir)
-
-    # Test data loader
-    print("Preparing test data...")
-    test_dataset = TensorDataset(torch.tensor(images).float(), torch.tensor(masks).float())
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-
-    # Load model
-    print("Loading model...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = UNet()
+def load_model(model_path, num_classes, device):
+    """Load the trained model."""
+    model = NestedUNet(input_channels=3, output_channels=num_classes).to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
-    model.to(device)
     model.eval()
+    return model
 
-    # Predict and visualize
-    print("Running predictions...")
-    for idx, (image, ground_truth_mask) in enumerate(test_loader):
-        image = image.to(device)  # Only pass the image
 
-        with torch.no_grad():
-            output = model(image).squeeze().cpu().numpy()
+def preprocess_image(image_path):
+    """Preprocess the input image."""
+    transform = Compose([ToTensor(), Normalize(mean=[0.5], std=[0.5])])
+    image = Image.open(image_path).convert("RGB")
+    return transform(image).unsqueeze(0)  # Add batch dimension
 
-        # Threshold the prediction
-        binary_mask = (output > 0.5).astype(np.uint8)
 
-        # Convert to OpenCV format for overlay
-        input_image = image.squeeze(0).squeeze().cpu().numpy()
-        input_image = (input_image * 255).astype(np.uint8)  # Rescale to 0-255
+def postprocess_mask(pred_mask):
+    """Ensure mask is clean and visualizable."""
+    # Ensure mask is uint8 and non-zero
+    pred_mask = pred_mask.astype(np.uint8)
+    return pred_mask
 
-        # Apply postprocessing
-        processed_image, teeth_count = CCA_Analysis(input_image, binary_mask)
 
-        # Ground truth mask for visualization
-        gt_mask = ground_truth_mask.squeeze().numpy()
+def CCA_Analysis(orig_image, cleaned_mask):
+    """
+    Perform CCA on the cleaned mask and draw rotated bounding boxes.
+    """
+    teeth_count = 0
+    image_with_boxes = orig_image.copy()
+    unique_classes = np.unique(cleaned_mask)
 
-        # Visualize input, ground truth, prediction, and overlay
-        plt.figure(figsize=(20, 5))
+    for class_id in unique_classes:
+        if class_id == 0:  # Skip background
+            continue
 
-        plt.subplot(1, 4, 1)
-        plt.title("Input Image")
-        plt.imshow(input_image, cmap="gray")
-        plt.axis("off")
+        # Isolate single class
+        single_class_mask = (cleaned_mask == class_id).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(single_class_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        plt.subplot(1, 4, 2)
-        plt.title("Ground Truth Mask")
-        plt.imshow(gt_mask, cmap="gray")
-        plt.axis("off")
+        for contour in contours:
+            if cv2.contourArea(contour) < 50:  # Filter very small areas
+                continue
 
-        plt.subplot(1, 4, 3)
-        plt.title("Predicted Mask")
-        plt.imshow(binary_mask, cmap="gray")
-        plt.axis("off")
+            # Get rotated bounding box
+            rect = cv2.minAreaRect(contour)
+            box = cv2.boxPoints(rect)
+            box = np.int0(perspective.order_points(box))
+            cv2.drawContours(image_with_boxes, [box], -1, (0, 255, 0), 1)
 
-        plt.subplot(1, 4, 4)
-        plt.title(f"Processed Overlay (Teeth: {teeth_count})")
-        plt.imshow(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
-        plt.axis("off")
+            # Add label
+            teeth_count += 1
+            (x, y), _ = cv2.minEnclosingCircle(contour)
+            cv2.putText(image_with_boxes, f"",
+                        (int(x), int(y) - 10),  # Y koordinatını hafif yukarı kaydır
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-        plt.tight_layout()
-        plt.show()
+    return image_with_boxes, teeth_count
 
-        # Stop after visualizing 5 samples
-        if idx == 4:
-            break
+
+
+def visualize_results(image_path, true_mask_path, pred_mask, image_with_boxes):
+    """Visualize the original image, true mask, predicted mask, and image with bounding boxes."""
+    image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+    true_mask = np.array(Image.open(true_mask_path))
+
+    plt.figure(figsize=(16, 6))
+
+    plt.subplot(1, 4, 1)
+    plt.title("Original Image")
+    plt.imshow(image)
+    plt.axis("off")
+
+    plt.subplot(1, 4, 2)
+    plt.title("True Mask")
+    plt.imshow(true_mask, cmap="nipy_spectral")  # True mask colorized
+    plt.axis("off")
+
+    plt.subplot(1, 4, 3)
+    plt.title("Predicted Mask")
+    cmap = mcolors.ListedColormap(plt.cm.nipy_spectral(np.linspace(0, 1, 33)))
+    plt.imshow(pred_mask, cmap=cmap, interpolation="nearest")
+    plt.axis("off")
+
+    plt.subplot(1, 4, 4)
+    plt.title("Bounding Boxes")
+    plt.imshow(image_with_boxes)
+    plt.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def predict(image_path, true_mask_path, model_path, num_classes, device):
+    """Predict the mask and draw refined bounding boxes."""
+    model = load_model(model_path, num_classes, device)
+    input_image = preprocess_image(image_path).to(device)
+
+    # Predict mask
+    with torch.no_grad():
+        output = model(input_image)
+        print("Model output shape:", output.shape)
+        pred_mask = output.argmax(1).cpu().numpy()[0]
+
+        # Debug: check if the mask is empty
+        if np.all(pred_mask == 0):
+            print("Warning: Predicted mask is entirely zero!")
+
+    # Post-process mask and analyze
+    cleaned_mask = postprocess_mask(pred_mask)
+    orig_image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+    image_with_boxes, teeth_count = CCA_Analysis(orig_image, cleaned_mask)
+
+    print(f"Total Detected Teeth: {teeth_count-1}")
+
+    # Visualize results
+    visualize_results(image_path, true_mask_path, cleaned_mask, image_with_boxes)
+
+
 
 if __name__ == "__main__":
-    test_pipeline()
+    # Paths
+    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/baran-dis-ornek-resized.jpg"
+    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/32.png"
+    model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/best3.pth"
+    num_classes = 33
+
+    # Device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Run prediction
+    predict(image_path, true_mask_path, model_path, num_classes, device)

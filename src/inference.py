@@ -126,7 +126,7 @@ def predict(image_path, true_mask_path, model_path, num_classes, device):
     orig_image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
     image_with_boxes, teeth_count = CCA_Analysis(orig_image, cleaned_mask)
 
-    print(f"Total Detected Teeth: {teeth_count}")
+    print(f"Total Detected Teeth: {teeth_count-1}")
 
     # Visualize results
     visualize_results(image_path, true_mask_path, cleaned_mask, image_with_boxes)
@@ -135,8 +135,8 @@ def predict(image_path, true_mask_path, model_path, num_classes, device):
 
 if __name__ == "__main__":
     # Paths
-    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_images/1.jpg"
-    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/1.png"
+    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_images/32.jpg"
+    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/32.png"
     model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/best3.pth"
     num_classes = 33
 
