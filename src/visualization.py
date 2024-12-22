@@ -17,7 +17,7 @@ def load_model(checkpoints_dir, model, device):
     return model
 
 
-def visualize_predictions(model, data_loader, device, output_dir, num_samples=5):
+def visualize_predictions(model, data_loader, device, output_dir, num_samples=1):
     """
     Modelin tahminlerini görselleştirir ve kaydeder.
     """

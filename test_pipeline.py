@@ -1,147 +1,107 @@
 import os
 import torch
-import numpy as np
-import cv2
 import matplotlib.pyplot as plt
-from torchvision.transforms import Compose, ToTensor, Normalize
-from scipy.spatial import distance as dist
-from imutils import perspective
 from PIL import Image
-from src.model import NestedUNet
-import matplotlib.colors as mcolors
+from torchvision.transforms import Compose, ToTensor, Normalize
+from src.DeepLabV3 import DeepLabV3Plus
+from skimage import morphology
+import numpy as np
+from scipy.ndimage import binary_fill_holes
 
-def midpoint(ptA, ptB):
-    """Calculate midpoint between two points."""
-    return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
-
-def load_model(model_path, num_classes, device):
-    """Load the trained model."""
-    model = NestedUNet(input_channels=3, output_channels=num_classes).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
+def load_model(checkpoints_dir, model, device):
+    """
+    Kaydedilen modeli yükler.
+    """
+    best_model_path = os.path.join(checkpoints_dir, "best.pth")
+    state_dict = torch.load(best_model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    print(f"Model loaded from {best_model_path}")
     return model
 
 
-def preprocess_image(image_path):
-    """Preprocess the input image."""
-    transform = Compose([ToTensor(), Normalize(mean=[0.5], std=[0.5])])
-    image = Image.open(image_path).convert("RGB")
-    return transform(image).unsqueeze(0)  # Add batch dimension
-
-
-def postprocess_mask(pred_mask):
-    """Ensure mask is clean and visualizable."""
-    # Ensure mask is uint8 and non-zero
-    pred_mask = pred_mask.astype(np.uint8)
-    return pred_mask
-
-
-def CCA_Analysis(orig_image, cleaned_mask):
+def preprocess_image(img_path, device):
     """
-    Perform CCA on the cleaned mask and draw rotated bounding boxes.
+    Dataset dışından gelen bir görüntüyü yükler ve ön işler.
     """
-    teeth_count = 0
-    image_with_boxes = orig_image.copy()
-    unique_classes = np.unique(cleaned_mask)
-
-    for class_id in unique_classes:
-        if class_id == 0:  # Skip background
-            continue
-
-        # Isolate single class
-        single_class_mask = (cleaned_mask == class_id).astype(np.uint8) * 255
-        contours, _ = cv2.findContours(single_class_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        for contour in contours:
-            if cv2.contourArea(contour) < 50:  # Filter very small areas
-                continue
-
-            # Get rotated bounding box
-            rect = cv2.minAreaRect(contour)
-            box = cv2.boxPoints(rect)
-            box = np.int0(perspective.order_points(box))
-            cv2.drawContours(image_with_boxes, [box], -1, (0, 255, 0), 1)
-
-            # Add label
-            teeth_count += 1
-            (x, y), _ = cv2.minEnclosingCircle(contour)
-            cv2.putText(image_with_boxes, f"",
-                        (int(x), int(y) - 10),  # Y koordinatını hafif yukarı kaydır
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-
-    return image_with_boxes, teeth_count
+    transform = Compose([ToTensor(), Normalize(mean=[0.5], std=[0.5])])  # Dataset ile aynı işlemler
+    image = Image.open(img_path).convert("RGB")
+    image_tensor = transform(image).unsqueeze(0).to(device)
+    return image, image_tensor
 
 
+def postprocess_mask(predicted_mask):
+    """
+    Tahmin maskesini işleyerek küçük noktaları kaldırır ve dişleri daha belirgin hale getirir.
+    """
+    # Küçük objeleri kaldır
+    processed_mask = morphology.remove_small_objects(predicted_mask.astype(bool), min_size=500)
 
-def visualize_results(image_path, true_mask_path, pred_mask, image_with_boxes):
-    """Visualize the original image, true mask, predicted mask, and image with bounding boxes."""
-    image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-    true_mask = np.array(Image.open(true_mask_path))
+    # Küçük delikleri doldur
+    processed_mask = binary_fill_holes(processed_mask)
 
-    plt.figure(figsize=(16, 6))
+    # Morfolojik işlemler
+    processed_mask = morphology.dilation(processed_mask, morphology.disk(5))  # Dilate işlemi
+    processed_mask = morphology.erosion(processed_mask, morphology.disk(3))  # Erode işlemi
 
-    plt.subplot(1, 4, 1)
-    plt.title("Original Image")
-    plt.imshow(image)
-    plt.axis("off")
-
-    plt.subplot(1, 4, 2)
-    plt.title("True Mask")
-    plt.imshow(true_mask, cmap="nipy_spectral")  # True mask colorized
-    plt.axis("off")
-
-    plt.subplot(1, 4, 3)
-    plt.title("Predicted Mask")
-    cmap = mcolors.ListedColormap(plt.cm.nipy_spectral(np.linspace(0, 1, 33)))
-    plt.imshow(pred_mask, cmap=cmap, interpolation="nearest")
-    plt.axis("off")
-
-    plt.subplot(1, 4, 4)
-    plt.title("Bounding Boxes")
-    plt.imshow(image_with_boxes)
-    plt.axis("off")
-
-    plt.tight_layout()
-    plt.show()
+    return processed_mask
 
 
-def predict(image_path, true_mask_path, model_path, num_classes, device):
-    """Predict the mask and draw refined bounding boxes."""
-    model = load_model(model_path, num_classes, device)
-    input_image = preprocess_image(image_path).to(device)
+def visualize_single_prediction(model, img_path, device, output_dir):
+    """
+    Verilen bir görüntü için modelin tahminini görselleştirir ve kaydeder.
+    """
+    model.eval()
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Predict mask
+    # Görüntü işleme
+    original_image, image = preprocess_image(img_path, device)
+
     with torch.no_grad():
-        output = model(input_image)
-        print("Model output shape:", output.shape)
-        pred_mask = output.argmax(1).cpu().numpy()[0]
+        output = model(image)
+        predicted_mask = torch.argmax(output, dim=1).cpu().numpy()[0]
 
-        # Debug: check if the mask is empty
-        if np.all(pred_mask == 0):
-            print("Warning: Predicted mask is entirely zero!")
+        # Post-process tahmin maskesi
+        processed_mask = postprocess_mask(predicted_mask)
 
-    # Post-process mask and analyze
-    cleaned_mask = postprocess_mask(pred_mask)
-    orig_image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-    image_with_boxes, teeth_count = CCA_Analysis(orig_image, cleaned_mask)
+        # Görselleştirme
+        plt.figure(figsize=(12, 4))
+        plt.subplot(1, 3, 1)
+        plt.title("Input Image")
+        plt.imshow(original_image)
+        plt.axis("off")
 
-    print(f"Total Detected Teeth: {teeth_count-1}")
+        plt.subplot(1, 3, 2)
+        plt.title("Predicted Mask (Raw)")
+        plt.imshow(predicted_mask, cmap="nipy_spectral")
+        plt.axis("off")
 
-    # Visualize results
-    visualize_results(image_path, true_mask_path, cleaned_mask, image_with_boxes)
+        plt.subplot(1, 3, 3)
+        plt.title("Post-Processed Mask")
+        plt.imshow(processed_mask, cmap="nipy_spectral")
+        plt.axis("off")
 
+        sample_path = os.path.join(output_dir, f"processed_{os.path.basename(img_path)}.png")
+        plt.savefig(sample_path)
+        plt.close()
+        print(f"Processed prediction saved to {sample_path}")
 
 
 if __name__ == "__main__":
-    # Paths
-    image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/baran-dis-ornek-resized.jpg"
-    true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/32.png"
-    model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/best3.pth"
-    num_classes = 33
+    # Yollar
+    checkpoints_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints"
+    output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/visualizations"
+    img_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/DentalPanoramicXrays/images/3.png"  # Dışarıdan yüklenen görüntü yolu
 
-    # Device
+    # Hyperparameters
+    num_classes = 33  # Eğitim sırasında kullanılan sınıf sayısı
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Run prediction
-    predict(image_path, true_mask_path, model_path, num_classes, device)
+    # Model
+    model = DeepLabV3Plus(input_channels=3, num_classes=num_classes).to(device)
+
+    # Load Model
+    model = load_model(checkpoints_dir, model, device)
+
+    # Visualize Prediction
+    visualize_single_prediction(model, img_path, device, output_dir)
