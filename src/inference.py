@@ -137,7 +137,7 @@ if __name__ == "__main__":
     # Paths
     image_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_images/65.jpg"
     true_mask_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/resized_masks/65.png"
-    model_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/best3.pth"
+    model_path = "/nested-unet/best3.pth"
     num_classes = 33
 
     # Device
