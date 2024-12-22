@@ -1,7 +1,7 @@
 import os
 import torch
 import matplotlib.pyplot as plt
-from src.model import NestedUNet
+from src.DeepLabV3 import  DeepLabV3Plus
 from src.dataset import MultiClassTeethDataset
 from torch.utils.data import DataLoader
 
@@ -78,7 +78,9 @@ if __name__ == "__main__":
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     # Model
-    model = NestedUNet(input_channels=3, output_channels=num_classes).to(device)
+    # Model
+    model = DeepLabV3Plus(input_channels=3, num_classes=num_classes).to(device)
+
 
     # Load Model
     model = load_model(checkpoints_dir, model, device)
