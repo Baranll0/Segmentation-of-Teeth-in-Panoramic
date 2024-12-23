@@ -15,12 +15,12 @@
 
 ## Project Overview
 
-This project implements a deep learning-based solution for segmenting individual teeth from panoramic X-ray images. It utilizes the Nested U-Net (U-Net++) architecture, known for its exceptional performance in semantic segmentation tasks. Key features of this project include:
+This project implements a deep learning-based solution for segmenting individual teeth from panoramic X-ray images. It utilizes the **DeepLabV3+** architecture, known for its exceptional performance in semantic segmentation tasks. Key features of this project include:
 
 - **Advanced Preprocessing**: Image resizing, normalization, and multi-class mask generation.
 - **Sophisticated Loss Function**: A combination of CrossEntropyLoss and DiceLoss to ensure precise segmentation.
-- **Post-processing Techniques**: Connected Component Analysis (CCA) to extract bounding boxes for individual teeth.
-- **Robust Evaluation**: Metrics such as Dice Coefficient, Combined Loss, and Accuracy to assess model performance.
+- **Post-processing Techniques**: Multi-class segmentation with unique labels for each tooth.
+- **Robust Evaluation**: Metrics such as Dice Coefficient and Validation Loss to assess model performance.
 
 This system is designed to assist dentists and radiologists by automating the tooth segmentation process, paving the way for more efficient and accurate dental assessments.
 
@@ -40,17 +40,17 @@ The dataset consists of panoramic X-ray images and corresponding segmentation ma
 ```
 
 - **Image Format**: JPG images resized to 512x512 pixels.
-- **Classes**: 33 unique classes (one for each tooth) and background labeled as 0.
+- **Classes**: Each tooth is assigned a unique class, with background labeled as 0.
 
 ---
 
 ## Model Architecture
 
-The Nested U-Net (U-Net++) model was chosen for its enhanced feature extraction and spatial preservation capabilities. Its architecture consists of:
+The **DeepLabV3+** model was chosen for its advanced feature extraction capabilities and effectiveness in segmentation tasks. Its architecture consists of:
 
-1. **Encoder**: Extracts hierarchical features using convolutional layers.
-2. **Bottleneck**: Captures high-level semantic information.
-3. **Decoder**: Reconstructs the segmented output with skip connections for spatial accuracy.
+1. **Encoder**: Utilizes ResNet as a backbone for hierarchical feature extraction.
+2. **ASPP Module**: Captures multi-scale contextual information.
+3. **Decoder**: Ensures spatial accuracy and generates the final segmented output.
 4. **Loss Function**: A hybrid of CrossEntropyLoss and DiceLoss for optimal segmentation performance.
 
 ---
@@ -59,17 +59,26 @@ The Nested U-Net (U-Net++) model was chosen for its enhanced feature extraction 
 
 ### Training Details
 
-- **Batch Size**: 2
+- **Batch Size**: 16
 - **Optimizer**: Adam
 - **Learning Rate**: 1e-4
 - **Loss Function**: CrossEntropyLoss + DiceLoss
-- **Metrics**: Dice Coefficient, Accuracy
-- **Epochs**: 200
+- **Metrics**: Dice Coefficient
+- **Epochs**: 50
+- **GPU Used**: NVIDIA A100
 
 ### Training Outputs
 
-- **Best Model**: `best.pt` (lowest validation loss)
-- **Last Model**: `last.pt` (final epoch)
+- **Best Model**: `best.pth`
+  - **Train Loss**: 0.08
+  - **Val Loss**: 0.16
+  - **Train Dice**: 0.91
+  - **Val Dice**: 0.82
+- **Last Model**: `last.pth`
+  - **Train Loss**: 0.03
+  - **Val Loss**: 0.205
+  - **Train Dice**: 0.96
+  - **Val Dice**: 0.82
 
 ---
 
@@ -77,21 +86,21 @@ The Nested U-Net (U-Net++) model was chosen for its enhanced feature extraction 
 
 ### Performance Metrics
 
-- **Final Combined Loss**: 0.199
-- **Dice Coefficient**: 0.872
-- **Accuracy**: 91.3%
+- **Best Model**:
+  - **Train Loss**: 0.08
+  - **Val Loss**: 0.16
+  - **Train Dice**: 0.91
+  - **Val Dice**: 0.82
 
 ### Visualization of Results
 
-#### Prediction Examples:
+#### Example Output
 
+![Segmentation Results](image.png)
 
+#### Training Convergence
 
-
-
-#### Training Convergence:
-
-Graphs illustrating training and validation metrics demonstrate steady convergence towards the optimal solution.
+Graphs illustrating training and validation loss and Dice coefficient show steady convergence, highlighting the model's generalization.
 
 ---
 
@@ -118,19 +127,17 @@ Graphs illustrating training and validation metrics demonstrate steady convergen
 
 ## Future Work and Improvements
 
-- **Incorporation of Augmentation Techniques**: To enhance model robustness against diverse X-ray imaging conditions.
-- **Integration with Clinical Software**: For real-time usage in dental clinics.
-- **Refinement of Post-processing**: Improve bounding box extraction using advanced techniques.
+- **Refinement of Masks**: Improve boundary precision using post-processing techniques.
+- **Model Optimization**: Experiment with different architectures and optimizers for better performance.
+- **Deployment**: Build a user-friendly interface for real-time segmentation in clinical settings.
 
 ---
 
 ## References
 
-1. Ronneberger, O., Fischer, P., & Brox, T. (2015). "U-Net: Convolutional Networks for Biomedical Image Segmentation".
-2. Zhou, Z., Siddiquee, M. M., Tajbakhsh, N., & Liang, J. (2018). "UNet++: A Nested U-Net Architecture for Medical Image Segmentation".
-3. PyTorch Documentation: [https://pytorch.org](https://pytorch.org)
+1. Chen, L.-C., et al. (2018). "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs".
+2. PyTorch Documentation: [https://pytorch.org](https://pytorch.org)
+3. NVIDIA A100 GPU Specifications: [https://www.nvidia.com/en-us/data-center/a100/](https://www.nvidia.com/en-us/data-center/a100/)
 
 ---
-
-This README is designed to provide a comprehensive and professional overview of the project, emphasizing technical details and clarity.
 

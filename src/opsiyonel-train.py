@@ -124,7 +124,7 @@ if __name__ == "__main__":
 
     # Hyperparameters
     batch_size = 2
-    learning_rate = 0.0001
+    learning_rate = 0.001
     epochs = 10
     num_classes = get_num_classes(meta_file)
 

@@ -62,10 +62,10 @@ def visualize_predictions(model, data_loader, device, output_dir, num_samples=1)
 
 if __name__ == "__main__":
     # Yollar
-    data_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed"
-    train_image_dir = os.path.join(data_dir, "resized_images")
-    train_mask_dir = os.path.join(data_dir, "resized_masks")
-    checkpoints_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints"
+    data_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/split_data/test"
+    train_image_dir = os.path.join(data_dir, "images")
+    train_mask_dir = os.path.join(data_dir, "masks")
+    checkpoints_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/colab"
     output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/visualizations"
 
     # Hyperparameters
