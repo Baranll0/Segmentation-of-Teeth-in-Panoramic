@@ -1,77 +1,46 @@
 import os
-import json
-from PIL import Image
-from datasets import Dataset, DatasetDict
-from torchvision.transforms import Resize, ToTensor
-from pathlib import Path
-from typing import List, Tuple
+import shutil
+from sklearn.model_selection import train_test_split
 
-# Paths to the data folders
-data_root_path = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/datasetkaggle/Teeth Segmentation JSON/d2"
-image_dir = os.path.join(data_root_path, "img")
-mask_dir = os.path.join(data_root_path, "masks_machine")
+def organize_dataset(image_dir, mask_dir, output_dir, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
+    """
+    Veriyi train, val ve test olarak organize eder ve belirtilen dizine kopyalar.
+    """
+    # Oranların toplamını kontrol et
+    assert train_ratio + val_ratio + test_ratio == 1.0, "Train, val ve test oranlarının toplamı 1.0 olmalı!"
 
-# Resize dimensions
-resize_dim = (512, 512)
-
-# Function to resize and save images
-def resize_and_save_images(image_paths: List[str], output_dir: str, size: Tuple[int, int]):
     os.makedirs(output_dir, exist_ok=True)
-    for img_path in image_paths:
-        img = Image.open(img_path).convert("RGB")
-        img_resized = img.resize(size, Image.LANCZOS)
-        output_path = os.path.join(output_dir, os.path.basename(img_path))
-        img_resized.save(output_path)
+    train_dir = os.path.join(output_dir, "train")
+    val_dir = os.path.join(output_dir, "val")
+    test_dir = os.path.join(output_dir, "test")
 
-# Function to resize and save masks
-def resize_and_save_masks(mask_paths: List[str], output_dir: str, size: Tuple[int, int]):
-    os.makedirs(output_dir, exist_ok=True)
-    for mask_path in mask_paths:
-        mask = Image.open(mask_path).convert("P")
-        mask_resized = mask.resize(size, Image.NEAREST)
-        output_path = os.path.join(output_dir, os.path.basename(mask_path))
-        mask_resized.save(output_path)
+    for subdir in ["images", "masks"]:
+        os.makedirs(os.path.join(train_dir, subdir), exist_ok=True)
+        os.makedirs(os.path.join(val_dir, subdir), exist_ok=True)
+        os.makedirs(os.path.join(test_dir, subdir), exist_ok=True)
 
-# Function to create a Dataset object
-def create_dataset(image_paths, mask_paths):
-    def load_image(image_path):
-        return ToTensor()(Image.open(image_path).convert("RGB"))
+    images = sorted(os.listdir(image_dir))
+    masks = sorted(os.listdir(mask_dir))
 
-    def load_mask(mask_path):
-        return ToTensor()(Image.open(mask_path).convert("P"))
+    # Verilerin bölünmesi
+    train_images, temp_images, train_masks, temp_masks = train_test_split(images, masks, test_size=1 - train_ratio, random_state=42)
+    val_images, test_images, val_masks, test_masks = train_test_split(temp_images, temp_masks, test_size=test_ratio / (test_ratio + val_ratio), random_state=42)
 
-    dataset = Dataset.from_dict({
-        "image": [load_image(p) for p in image_paths],
-        "mask": [load_mask(p) for p in mask_paths],
-    })
-    return dataset
+    # Verilerin kopyalanması
+    for split, (split_images, split_masks) in zip(
+        ["train", "val", "test"], [(train_images, train_masks), (val_images, val_masks), (test_images, test_masks)]
+    ):
+        for img, mask in zip(split_images, split_masks):
+            shutil.copy(os.path.join(image_dir, img), os.path.join(output_dir, split, "images", img))
+            shutil.copy(os.path.join(mask_dir, mask), os.path.join(output_dir, split, "masks", mask))
 
-# Main data processing function
-def process_data(image_dir: str, mask_dir: str, output_dir: str, resize_dim: Tuple[int, int]):
-    # List all images and masks
-    image_paths = sorted([os.path.join(image_dir, img) for img in os.listdir(image_dir)])
-    mask_paths = sorted([os.path.join(mask_dir, mask) for mask in os.listdir(mask_dir)])
+    print(f"Veri organize edildi ve {output_dir} dizinine kopyalandı.")
 
-    # Prepare output directories
-    resized_image_dir = os.path.join(output_dir, "resized_images")
-    resized_mask_dir = os.path.join(output_dir, "resized_masks")
 
-    # Resize images and masks
-    resize_and_save_images(image_paths, resized_image_dir, resize_dim)
-    resize_and_save_masks(mask_paths, resized_mask_dir, resize_dim)
-
-    # Create datasets
-    train_idx = int(len(image_paths) * 0.8)
-    train_dataset = create_dataset(image_paths[:train_idx], mask_paths[:train_idx])
-    val_dataset = create_dataset(image_paths[train_idx:], mask_paths[train_idx:])
-
-    dataset_dict = DatasetDict({"train": train_dataset, "validation": val_dataset})
-    return dataset_dict
-
+# Ana fonksiyon
 if __name__ == "__main__":
-    # Output directory for processed data
-    output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed"
+    image_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/img"
+    mask_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed/mask"
+    output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/split_data"
 
-    # Process data and get the dataset object
-    dataset = process_data(image_dir, mask_dir, output_dir, resize_dim)
-    print("Data processing complete. Dataset ready for training.")
+    organize_dataset(image_dir, mask_dir, output_dir, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15)

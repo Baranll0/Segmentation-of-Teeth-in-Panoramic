@@ -111,18 +111,21 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, device, e
 
 if __name__ == "__main__":
     # Paths
-    data_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/processed"
+    data_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/data/split_data"
     meta_file = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/dataset/datasetkaggle/Teeth Segmentation JSON/meta.json"
-    train_image_dir = os.path.join(data_dir, "resized_images")
-    train_mask_dir = os.path.join(data_dir, "resized_masks")
+
+    train_image_dir = os.path.join(data_dir, "train/images")
+    train_mask_dir = os.path.join(data_dir, "train/masks")
+    val_image_dir = os.path.join(data_dir, "val/images")
+    val_mask_dir = os.path.join(data_dir, "val/masks")
 
     checkpoints_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints"
     os.makedirs(checkpoints_dir, exist_ok=True)
 
     # Hyperparameters
-    batch_size = 4
-    learning_rate = 0.001
-    epochs = 70
+    batch_size = 2
+    learning_rate = 0.0001
+    epochs = 10
     num_classes = get_num_classes(meta_file)
 
     # Device
@@ -130,7 +133,7 @@ if __name__ == "__main__":
 
     # Dataset and DataLoader
     train_dataset = MultiClassTeethDataset(train_image_dir, train_mask_dir)
-    val_dataset = MultiClassTeethDataset(train_image_dir, train_mask_dir)  # Change for real validation data
+    val_dataset = MultiClassTeethDataset(val_image_dir, val_mask_dir)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 

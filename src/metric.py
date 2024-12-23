@@ -79,7 +79,7 @@ def plot_metrics(metrics, output_dir):
 
 if __name__ == "__main__":
     # Yollar
-    log_file = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/checkpoints/metrics.log"
+    log_file = "/DeepLabV3-Idare/metrics.log"
     output_dir = "/media/baran/Disk1/Segmentation-of-Teeth-in-Panoramic/visualizations"
 
     # Metrikleri parse et ve çiz
