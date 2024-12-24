@@ -139,7 +139,5 @@ Graphs illustrating training and validation loss and Dice coefficient show stead
 
 1. Chen, L.-C., et al. (2018). "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs".
 2. PyTorch Documentation: [https://pytorch.org](https://pytorch.org)
-3. NVIDIA A100 GPU Specifications: [https://www.nvidia.com/en-us/data-center/a100/](https://www.nvidia.com/en-us/data-center/a100/)
-
 ---
 
