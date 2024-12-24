@@ -96,7 +96,9 @@ The **DeepLabV3+** model was chosen for its advanced feature extraction capabili
 
 #### Example Output
 
-![Segmentation Results](image.png)
+![Segmentation Results](https://i.imgur.com/XmW596w.png)
+![Segmentation Results2](https://i.imgur.com/5n3eirO.png)
+
 
 #### Training Convergence
 
