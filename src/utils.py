@@ -27,9 +27,7 @@ def precision_recall_f1(pred, target, num_classes):
     """
     Precision, Recall ve F1 skorlarını hesaplar.
     """
-    precisions = []
-    recalls = []
-    f1_scores = []
+    precisions, recalls, f1_scores = [], [], []
 
     for class_idx in range(num_classes):
         pred_class = (pred == class_idx).float()
@@ -47,11 +45,7 @@ def precision_recall_f1(pred, target, num_classes):
         recalls.append(recall.item())
         f1_scores.append(f1.item())
 
-    mean_precision = np.mean(precisions)
-    mean_recall = np.mean(recalls)
-    mean_f1 = np.mean(f1_scores)
-
-    return mean_precision, mean_recall, mean_f1, precisions, recalls, f1_scores
+    return np.mean(precisions), np.mean(recalls), np.mean(f1_scores), precisions, recalls, f1_scores
 
 
 def calculate_metrics(pred, target, num_classes):
@@ -62,8 +56,7 @@ def calculate_metrics(pred, target, num_classes):
 
     accuracy = (pred == target).float().mean().item()
     mean_dice, dice_scores = dice_coefficient(pred, target, num_classes)
-    mean_precision, mean_recall, mean_f1, precisions, recalls, f1_scores = precision_recall_f1(pred, target,
-                                                                                               num_classes)
+    mean_precision, mean_recall, mean_f1, precisions, recalls, f1_scores = precision_recall_f1(pred, target, num_classes)
 
     return {
         "accuracy": accuracy,
@@ -71,7 +64,7 @@ def calculate_metrics(pred, target, num_classes):
         "dice_scores": dice_scores,
         "mean_precision": mean_precision,
         "mean_recall": mean_recall,
-        "mean_f1": mean_f1,
+        "mean_f1": mean_f1,  # Bu anahtar f1_score hesaplamasını temsil eder
         "precisions": precisions,
         "recalls": recalls,
         "f1_scores": f1_scores
@@ -95,7 +88,7 @@ def save_metrics_plot(history, output_dir):
     plt.figure(figsize=(12, 12))
 
     plt.subplot(2, 2, 1)
-    plt.plot(epochs, history['loss'], label='Loss')
+    plt.plot(epochs, history['loss'], label='Train Loss')
     plt.plot(epochs, history['val_loss'], label='Val Loss')
     plt.title('Loss Over Epochs')
     plt.xlabel('Epochs')
@@ -103,9 +96,9 @@ def save_metrics_plot(history, output_dir):
     plt.legend()
 
     plt.subplot(2, 2, 2)
-    plt.plot(epochs, history['dice'], label='Dice')
+    plt.plot(epochs, history['dice'], label='Train Dice')
     plt.plot(epochs, history['val_dice'], label='Val Dice')
-    plt.title('Dice Over Epochs')
+    plt.title('Dice Coefficient Over Epochs')
     plt.xlabel('Epochs')
     plt.ylabel('Dice Coefficient')
     plt.legend()
@@ -130,19 +123,20 @@ def save_metrics_plot(history, output_dir):
     plt.close()
 
 
-def save_sample_visualizations(model, data_loader, device, output_dir):
+def save_sample_visualizations(model, data_loader, device, output_dir, num_samples=5):
     """
     Eğitim sonrası örnek görselleri kaydeder.
     """
     model.eval()
+    os.makedirs(output_dir, exist_ok=True)
+
     with torch.no_grad():
         for idx, (images, masks) in enumerate(data_loader):
             images, masks = images.to(device), masks.to(device)
             outputs = model(images)
             predicted = torch.argmax(outputs, dim=1).cpu().numpy()
 
-            # İlk batch'ten bir örnek kaydet
-            for i in range(min(len(images), 5)):
+            for i in range(min(len(images), num_samples)):
                 image = images[i].cpu().numpy().transpose(1, 2, 0)
                 true_mask = masks[i].cpu().numpy()
                 pred_mask = predicted[i]

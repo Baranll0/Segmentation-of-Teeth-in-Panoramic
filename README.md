@@ -92,13 +92,21 @@ The **DeepLabV3+** model was chosen for its advanced feature extraction capabili
   - **Train Dice**: 0.91
   - **Val Dice**: 0.82
 
+### Test Results
+
+When tested on the test dataset:
+
+- **Average Dice Score**: 0.8142
+- **Average F1 Score**: 0.9580
+
+These metrics confirm the model's robust performance and generalization ability.
+
 ### Visualization of Results
 
 #### Example Output
 
 ![Segmentation Results](https://i.imgur.com/XmW596w.png)
 ![Segmentation Results2](https://i.imgur.com/5n3eirO.png)
-
 
 #### Training Convergence
 
@@ -140,4 +148,3 @@ Graphs illustrating training and validation loss and Dice coefficient show stead
 1. Chen, L.-C., et al. (2018). "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs".
 2. PyTorch Documentation: [https://pytorch.org](https://pytorch.org)
 ---
-
