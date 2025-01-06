@@ -27,7 +27,7 @@ This system is designed to automate and enhance dental image analysis, assisting
 ## Dataset Description
 The dataset consists of 598 panoramic X-ray images and corresponding segmentation masks. Each tooth is uniquely labeled, enabling precise multiclass segmentation.
 
-![Dataset Description](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_152538412.png?Expires=1735238685&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=n25UGAeOOd1Otlp5ufiLp86VjBQ5OMVL3jqrAI1m3EQTcIWQ156yOZdzJM0WsTl5nQk7qQfZMSNCx59DmzLhpLcXjWtACjO9s8MQXwTER0uuAzNIM8NsE5mkOmpD6CFqPipjsDZKPA1K-4iLzYI6zrWU0JqtHv9Y0AqmVXs~M95f3yNK9LtoWTSeBWSUq9L8QiYp~toP4QdHhFhw8ji69tZTIfKNx~aA1qdpYt~JoTw7vUxZGtGXJwRe-gZ4O8gA4YvCv8QYKZdNEbxLN4ETJAk2tBj7ZRd5SZ2YtcBtwep07FhxvjDIo5r9FIBQOiaNM8~x0-X1oNGwxTyVtKmNUQ__)
+![Dataset Description](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_152538412.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=tYDSHmgUr05xp0Qy~goU0M869oQFRXuZmH89jKshdXUKpNCWDw2X4waidqPWjoDg2zjE8ITSb8ZYCcMMPsqnrdBjCdxXJirBVKQSjuAZI~NPWKzCyL6a5UTQn9loYlhiMwlhEY78uoHkeOum0ctoyoQ2KarMFCpsIYuvHtlD5DeKUhhOdV4DUD4CsN~uqdWdNBByXxeK89gROsP2-tSsNtbFdGfdZimHLW62paA5D1AUnt9WuyOUVXYHGwNzcVpNAP0t9cExwHUWeh5xq-pnSv1bfxJCZwnZKAy22QWF5J8VldvJ7ArszFlubTgwCUF3RpXQxkXBNSs0Egcwq8NV6g__)
 ### Dataset Characteristics
 - **Total Images**: 598
 - **Total Masks**: 598
@@ -39,8 +39,8 @@ The dataset consists of 598 panoramic X-ray images and corresponding segmentatio
 1. **Image Resizing**: Images resized to 512x512 pixels to reduce computational overhead while preserving details.
 2. **Normalization**: Pixel values normalized to [0, 1] to ensure consistent input scaling.
 3. **Multi-class Mask Generation**: Segmentation masks converted to represent unique class IDs (0 for background, 1–32 for individual teeth).
-
-![Dataset architecture](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_213554717.png?Expires=1735238685&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=R1fdXhtoV1xC-uSBXypzsCqI6KQ15OwGwsh44IIr8xJXf9u02N1UXGhegbLmCsZw2z7SmKmLmQdzydf0uk50IsLyDSbWabBtEdijZvaK5~ZmtuWnmhAYqJKeo0PYH~EGQPoMXKOwSOAZHb9kfRZtXR87-vqOjv~vmfn9wNlL~jg1cXYTr6CKBj8gODweKtShNro6ehv1BiTS9oAH9zKMwMD26Tt4Hkub4fmsUnfWf4q3tlG~0wr7FOFkB4hMLfI-jvM1OvQcgjTB1FMr2Rt32GPBSsS1Ov7z3Vbi31m5JIRP6MzPQab7Th0OOkM74sqxUrXYddePoHOGtzizUw-GMQ__)
+<br>
+![Dataset architecture](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_213554717.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=xufQjWEnvCSfLwRWgv76QPCMiil5gLq0LtMsGmPdFm15~T8G8etBof7kjeLHnvHw4s4FRGmd46BUYWKMIhZFvebRP3MHjqioflsB~0o~voDBv2hto~3NgU0ETPxU-zv0NUxOHQBAed~Q6EDSQdjk0NQnS2NbRow-GaNU4Z0MjnB32p8-Bh4D05IezbdZuhXsQOouiWIIqvj6bCG0vnhzPT2S7B0Qe-Fm2~K6riFbdB~J0OnkyX6EuC9HHvdfxM8UbPaxvBgq-QmLnkv9vKZN7ZTMJnWktgwDWkVvVCDjpF~BfH16Dqpbcv7zDg~gksTnbWHQZGnWqozA~u6bm2F~EQ__)
 
 ---
 
@@ -57,7 +57,7 @@ The **DeepLabV3+** model was chosen for its advanced segmentation capabilities, 
 - **Unique Labels**: Each tooth assigned a distinct class for clear differentiation.
 - **Color-coded Masks**: Masks visualized with unique colors for each class, enabling easy verification.
 
-![Model Architecture](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_222417018.png?Expires=1735238685&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=TzzfTeqslGAbc37JRuLaPoOBfk125nmENBACXl-YyekjL16zgkrN7a7b5mFqfGtvzL7ETFOXTuDth~6DrHOI1KbBL6sM5FYiBAXJsGwcgXTgdh4jYdlFKKOuzh3nlZM43FbivOfPegGJevd0mqt7AMze8TsEgZLYWJi58G~jMx4EAVTuuGvyN~baxddGjgx7GbElMLdIZ~qkT9ZwXskjkeGc0BXlEE5Ru5OaNoiSMvmefTiaHnxhhGA1Ko0e7KIIFxQrLfPhPJerJIXV~RLRmWi9zw-1qwu9Hiaihj2FPEXybBgOhpXRJtAKsZoIMsvCj5Wk3-nL1gRe~jT4Wopmjg__)
+![Model Architecture](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_222417018.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=qLpREsDiY7nCInuoFJQWEFokg1qaWe9UXKfk8DiK7ZfqNhyZK1IatmDweejL-W~~WDN35vKvF936X39ock4AqGNWtn5BbJAumGtbSZ~Srl6t8JyMjoOwtw80v0xrpF1NKZYPIjwwG917dEowFqtBCpxDdV82reJ4h0SOh0d1065jYC7~nvrwzsbEAUsVNg3rfs9mLJXxDmxyAo38pY1fnqEC251QykMq74mDoIdVv9Mlpaii77wXQqRA8yF~j5N3TUjrmnTi~tc6yLiunNW4PrhxG1KH3gUmjzIgJ~7ZBHSLJyxet97e1ckVt-0ZP-PejO6k1SkSiiZAq4uMhRKKfg__)
 ---
 
 ## Training Pipeline
@@ -81,7 +81,7 @@ The **DeepLabV3+** model was chosen for its advanced segmentation capabilities, 
   - **Train Dice**: 0.91
   - **Val Dice**: 0.82
 
-![Predict](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_222632594.png?Expires=1735238685&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=mmwjEg2-Ph1gWbN0ZGyGjAdw~GrAMyGxl8VdeVf5Lh00WtKGR~8qYb1eJBlaSIpZ2IHR48Lx2uPlESQqoxmVtnX8SbLM7yyuKZ7urPgRfCay7XliWMPFLOUv7qZqQGdhFx~TcpvGzAlcj3EWeOOBloo9Vs3h0-LE7gX3pAs73vpixzj3JChOZwapoXfmKb8Ax6XyIL7zEupS64c0cbTWSgYDpR5tZ~V0lSs0J4DbPoBtSACte8KgQzdLRNYxg3mfQFg5dciOmyo~rL246jTxDY7vHG9N-Jw3U8gyO1GDfxLxchZWqHaHxssJLM1yU-JTYl0H1ezupglX~By2bdGFgg__)
+![Predict](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_222632594.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=zMCc7~Lyu1CT5LSnffBFheC8PWXVdVSY3vl~nHCDp2ZGRZmp4Rwax~FKt-~xr899NFUCALTsEP4uMNfSgseDmZe0~-TTuQB27XEIpPdG35HoC-wdsVkA9xajAZApwAeNtHC0bX4Nl5X31oqZ1pi~E8fmUzr3BmoaDzixZYFTyheNIyhhKcqD2U6rU-M~33Hd-67BXBdTFIwN2uyvY20pV-C0YQAzahpc~LW4WoZNzBs3GVroMccDDy6pyfM9SUKvkwZVwxo-EH0CNRKB1qwcQcKCU92N5qvKlekGjrAq0zlqXVBeoo7wzPmQmfjbdv974WCAMDz-PLvccp30eF2YVQ__)
 
 ---
 
