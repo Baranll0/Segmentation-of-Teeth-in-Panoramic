@@ -27,7 +27,7 @@ This system is designed to automate and enhance dental image analysis, assisting
 ## Dataset Description
 The dataset consists of 598 panoramic X-ray images and corresponding segmentation masks. Each tooth is uniquely labeled, enabling precise multiclass segmentation.
 
-![Dataset Description](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_152538412.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=tYDSHmgUr05xp0Qy~goU0M869oQFRXuZmH89jKshdXUKpNCWDw2X4waidqPWjoDg2zjE8ITSb8ZYCcMMPsqnrdBjCdxXJirBVKQSjuAZI~NPWKzCyL6a5UTQn9loYlhiMwlhEY78uoHkeOum0ctoyoQ2KarMFCpsIYuvHtlD5DeKUhhOdV4DUD4CsN~uqdWdNBByXxeK89gROsP2-tSsNtbFdGfdZimHLW62paA5D1AUnt9WuyOUVXYHGwNzcVpNAP0t9cExwHUWeh5xq-pnSv1bfxJCZwnZKAy22QWF5J8VldvJ7ArszFlubTgwCUF3RpXQxkXBNSs0Egcwq8NV6g__)
+![Dataset Description]( https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_152538412.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=tYDSHmgUr05xp0Qy~goU0M869oQFRXuZmH89jKshdXUKpNCWDw2X4waidqPWjoDg2zjE8ITSb8ZYCcMMPsqnrdBjCdxXJirBVKQSjuAZI~NPWKzCyL6a5UTQn9loYlhiMwlhEY78uoHkeOum0ctoyoQ2KarMFCpsIYuvHtlD5DeKUhhOdV4DUD4CsN~uqdWdNBByXxeK89gROsP2-tSsNtbFdGfdZimHLW62paA5D1AUnt9WuyOUVXYHGwNzcVpNAP0t9cExwHUWeh5xq-pnSv1bfxJCZwnZKAy22QWF5J8VldvJ7ArszFlubTgwCUF3RpXQxkXBNSs0Egcwq8NV6g__)
 ### Dataset Characteristics
 - **Total Images**: 598
 - **Total Masks**: 598
@@ -39,7 +39,7 @@ The dataset consists of 598 panoramic X-ray images and corresponding segmentatio
 1. **Image Resizing**: Images resized to 512x512 pixels to reduce computational overhead while preserving details.
 2. **Normalization**: Pixel values normalized to [0, 1] to ensure consistent input scaling.
 3. **Multi-class Mask Generation**: Segmentation masks converted to represent unique class IDs (0 for background, 1–32 for individual teeth).
-<br>
+
 ![Dataset architecture](https://app-cdn.readytensor.ai/publications/resources/hubId=1790/publicationId=486/image_2024-12-25_213554717.png?Expires=1736165489&Key-Pair-Id=K2V2TN6YBJQHTG&Signature=xufQjWEnvCSfLwRWgv76QPCMiil5gLq0LtMsGmPdFm15~T8G8etBof7kjeLHnvHw4s4FRGmd46BUYWKMIhZFvebRP3MHjqioflsB~0o~voDBv2hto~3NgU0ETPxU-zv0NUxOHQBAed~Q6EDSQdjk0NQnS2NbRow-GaNU4Z0MjnB32p8-Bh4D05IezbdZuhXsQOouiWIIqvj6bCG0vnhzPT2S7B0Qe-Fm2~K6riFbdB~J0OnkyX6EuC9HHvdfxM8UbPaxvBgq-QmLnkv9vKZN7ZTMJnWktgwDWkVvVCDjpF~BfH16Dqpbcv7zDg~gksTnbWHQZGnWqozA~u6bm2F~EQ__)
 
 ---
